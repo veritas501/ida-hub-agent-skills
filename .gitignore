@@ -1,0 +1,25 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Python tooling
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Logs / temp
+*.log
+*.tmp
+*.swp
+
+/ref
