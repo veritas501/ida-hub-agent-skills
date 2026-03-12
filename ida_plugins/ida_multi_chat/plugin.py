@@ -162,13 +162,10 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
             return
 
         try:
-            started = self._client.connect()
+            self._client.connect()
         except Exception as exc:
             self._log(f"Connection failed: {exc}")
             return
-
-        if started:
-            self._log(f"Connecting to {self._config.host}:{self._config.port}")
 
     def disconnect_from_hub(self) -> None:
         if self._client is None:
@@ -241,11 +238,17 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
         self._action_handlers.clear()
 
     def _on_client_status(self, _state: str, message: str) -> None:
-        self._log(message)
+        if message:
+            self._log(message)
 
     @staticmethod
     def _log(message: str) -> None:
+        prefix = "[IDA Multi Chat] "
+        text = message
+        if text.startswith(prefix):
+            text = text[len(prefix) :]
+
         if hasattr(ida_kernwin, "msg"):
-            ida_kernwin.msg(f"[IDA Multi Chat] {message}\n")
+            ida_kernwin.msg(f"{prefix}{text}\n")
         else:
-            print(f"[IDA Multi Chat] {message}")
+            print(f"{prefix}{text}")

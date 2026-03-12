@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import platform
+import random
 import threading
 import traceback
-import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -12,12 +14,14 @@ import idaapi  # type: ignore
 import idc  # type: ignore
 import websocket  # type: ignore
 
-from .core import ExecutionResult, ScriptExecutor, create_ida_domain_db
+from .core import ExecutionResult, ScriptExecutor
+
+logging.getLogger("websocket").setLevel(logging.CRITICAL)
 
 
 @dataclass(frozen=True)
 class HubConfig:
-    host: str = "localhost"
+    host: str = "127.0.0.1"
     port: int = 10086
     reconnect_interval: float = 5.0
 
@@ -39,7 +43,7 @@ class IDAHubClient:
         self._config = config
         self._script_executor = script_executor
         self._status_callback = status_callback
-        self._instance_id = uuid.uuid4().hex[:8]
+        self._instance_id = self._generate_instance_id()
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._registered_event = threading.Event()
@@ -148,13 +152,14 @@ class IDAHubClient:
                 break
 
             message = (
-                self._last_error
-                or f"Connection closed, retrying in {self._config.reconnect_interval:g}s"
+                f"{self._last_error}; retrying in {self._config.reconnect_interval:g}s"
+                if self._last_error
+                else f"Connection closed, retrying in {self._config.reconnect_interval:g}s"
             )
             self._set_state(self.STATE_DISCONNECTED, message)
             self._stop_event.wait(self._config.reconnect_interval)
             if not self._stop_event.is_set():
-                self._set_state(self.STATE_CONNECTING, f"Reconnecting to {url}")
+                self._set_state(self.STATE_CONNECTING, "")
 
         with self._lock:
             self._thread = None
@@ -167,6 +172,20 @@ class IDAHubClient:
 
     def _build_ws_url(self) -> str:
         return f"ws://{self._config.host}:{self._config.port}/ws"
+
+    def _generate_instance_id(self) -> str:
+        filename = self._first_non_empty(
+            self._call_ida(lambda: idaapi.get_root_filename()),
+            self._call_ida(lambda: idc.get_root_filename()),
+            "ida",
+        )
+        stem = os.path.splitext(os.path.basename(filename))[0].strip() or "ida"
+        normalized = "".join(
+            char if (char.isalnum() or char in {"_", "-"}) else "_" for char in stem
+        )
+        base = normalized[:24] or "ida"
+        suffix = f"{random.randint(0, 999):03d}"
+        return f"{base}_{suffix}"
 
     def _on_open(self, ws_app: Any) -> None:
         self._last_error = ""
@@ -208,9 +227,10 @@ class IDAHubClient:
             return
 
     def _on_error(self, _ws_app: Any, error: Any) -> None:
-        self._last_error = f"WebSocket error: {error}"
-        if not self._manual_disconnect:
-            self._set_state(self.STATE_DISCONNECTED, self._last_error)
+        text = str(error)
+        if "opcode=8" in text and "Register timeout" in text:
+            return
+        self._last_error = f"WebSocket error: {text}"
 
     def _on_close(self, _ws_app: Any, status_code: Any, message: Any) -> None:
         if self._manual_disconnect:
@@ -221,7 +241,6 @@ class IDAHubClient:
             suffix = f" (code={status_code}, message={message})"
         if not self._last_error:
             self._last_error = f"WebSocket closed{suffix}"
-        self._set_state(self.STATE_DISCONNECTED, self._last_error)
 
     def _handle_execute(self, payload: dict[str, Any]) -> None:
         request_id = str(payload.get("request_id") or "")
@@ -267,20 +286,16 @@ class IDAHubClient:
         target.send(message)
 
     def _get_instance_info(self) -> dict[str, str]:
-        db = create_ida_domain_db()
         module = self._first_non_empty(
-            getattr(db, "module", None),
             self._call_ida(lambda: idaapi.get_root_filename()),
             self._call_ida(lambda: idc.get_root_filename()),
             "unknown",
         )
         db_path = self._first_non_empty(
-            getattr(db, "path", None),
             self._call_ida(self._get_idb_path),
             "",
         )
         architecture = self._first_non_empty(
-            getattr(db, "architecture", None),
             self._call_ida(self._get_architecture),
             "unknown",
         )

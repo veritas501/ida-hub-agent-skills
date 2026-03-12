@@ -1,3 +1,4 @@
+import ast
 import json
 import os
 from typing import Any
@@ -29,7 +30,7 @@ class HubConfigPersistence:
             return default
 
         return HubConfig(
-            host=self._read_host(raw_data, default.host),
+            host=self._read_host(raw_data.get("host"), default.host),
             port=self._read_int(raw_data.get("port"), default.port),
             reconnect_interval=self._read_float(
                 raw_data.get("reconnect_interval"),
@@ -48,7 +49,19 @@ class HubConfigPersistence:
 
     @staticmethod
     def _read_host(raw_value: Any, default: str) -> str:
+        if isinstance(raw_value, dict):
+            raw_value = raw_value.get("host")
+
         value = str(raw_value or "").strip()
+        if value.startswith("{") and "host" in value:
+            try:
+                parsed = ast.literal_eval(value)
+                if isinstance(parsed, dict):
+                    nested_host = str(parsed.get("host") or "").strip()
+                    if nested_host:
+                        value = nested_host
+            except (ValueError, SyntaxError):
+                pass
         return value or default
 
     @staticmethod
