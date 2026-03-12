@@ -25,11 +25,15 @@ Hub Settings
 Advanced Settings
 
 <Reconnect   :{reconnect}> seconds
+<Auto Connect:{auto_connect_enabled}>{auto_connect_group}>
 """,
             {
                 "host": ida_kernwin.Form.StringInput(swidth=40),
                 "port": ida_kernwin.Form.StringInput(swidth=16),
                 "reconnect": ida_kernwin.Form.StringInput(swidth=16),
+                "auto_connect_group": ida_kernwin.Form.ChkGroupControl(
+                    ("auto_connect_enabled",)
+                ),
             },
         )
 
@@ -38,6 +42,7 @@ Advanced Settings
         self.host.value = self._initial_config.host
         self.port.value = str(self._initial_config.port)
         self.reconnect.value = str(self._initial_config.reconnect_interval)
+        self.auto_connect_enabled.checked = self._initial_config.auto_connect
 
         try:
             ok = self.Execute()
@@ -47,7 +52,13 @@ Advanced Settings
             host = str(self.host.value or "").strip() or self._initial_config.host
             port = int(str(self.port.value or "").strip())
             reconnect = float(str(self.reconnect.value or "").strip())
-            return HubConfig(host=host, port=port, reconnect_interval=reconnect)
+            auto_connect = bool(self.auto_connect_enabled.checked)
+            return HubConfig(
+                host=host,
+                port=port,
+                reconnect_interval=reconnect,
+                auto_connect=auto_connect,
+            )
         finally:
             self.Free()
 
@@ -121,6 +132,8 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
         self._log(
             f"IDA Multi Chat loaded. Current config: {self._config.host}:{self._config.port}"
         )
+        if self._config.auto_connect:
+            self.connect_to_hub(retry_on_initial_failure=False)
         return idaapi.PLUGIN_KEEP
 
     def run(self, _arg: int) -> None:
@@ -157,12 +170,14 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
 
         return idaapi.AST_ENABLE_ALWAYS if enabled else idaapi.AST_DISABLE_ALWAYS
 
-    def connect_to_hub(self) -> None:
+    def connect_to_hub(self, retry_on_initial_failure: bool = True) -> None:
         if self._client is None:
             return
 
         try:
-            self._client.connect()
+            self._client.connect(
+                retry_on_initial_failure=retry_on_initial_failure,
+            )
         except Exception as exc:
             self._log(f"Connection failed: {exc}")
             return
@@ -196,7 +211,8 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
 
         self._log(
             f"Settings saved: {new_config.host}:{new_config.port}, "
-            f"reconnect interval {new_config.reconnect_interval:g}s"
+            f"reconnect interval {new_config.reconnect_interval:g}s, "
+            f"auto_connect={'1' if new_config.auto_connect else '0'}"
         )
 
     def _register_actions(self) -> None:

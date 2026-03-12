@@ -36,6 +36,10 @@ class HubConfigPersistence:
                 raw_data.get("reconnect_interval"),
                 default.reconnect_interval,
             ),
+            auto_connect=self._read_bool(
+                raw_data.get("auto_connect"),
+                default.auto_connect,
+            ),
         )
 
     def save(self, config: HubConfig) -> None:
@@ -43,6 +47,7 @@ class HubConfigPersistence:
             "host": config.host,
             "port": config.port,
             "reconnect_interval": config.reconnect_interval,
+            "auto_connect": config.auto_connect,
         }
         with open(self._config_path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=4, ensure_ascii=True)
@@ -77,3 +82,17 @@ class HubConfigPersistence:
             return float(raw_value)
         except (TypeError, ValueError):
             return default
+
+    @staticmethod
+    def _read_bool(raw_value: Any, default: bool) -> bool:
+        if isinstance(raw_value, bool):
+            return raw_value
+        if isinstance(raw_value, (int, float)):
+            return bool(raw_value)
+        if isinstance(raw_value, str):
+            text = raw_value.strip().lower()
+            if text in {"1", "true", "yes", "y", "on"}:
+                return True
+            if text in {"0", "false", "no", "n", "off"}:
+                return False
+        return default

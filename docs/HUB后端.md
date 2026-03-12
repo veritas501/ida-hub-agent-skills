@@ -133,7 +133,7 @@ class ConfigResponse(BaseModel):
 ```python
 class Settings(BaseSettings):
     host: str = "0.0.0.0"
-    port: int = 8765
+    port: int = 10086
     debug: bool = False
 
     class Config:
@@ -147,12 +147,12 @@ class Settings(BaseSettings):
 cd hub/web && npm run build
 
 # 2. 启动服务（单端口）
-cd hub && python run.py --host 0.0.0.0 --port 8765
+cd hub && python run.py --host 0.0.0.0 --port 10086
 
 # 3. 访问
-# http://192.168.1.100:8765/        → 前端
-# http://192.168.1.100:8765/api/    → API
-# http://192.168.1.100:8765/docs    → API 文档
+# http://192.168.1.100:10086/        → 前端
+# http://192.168.1.100:10086/api/    → API
+# http://192.168.1.100:10086/docs    → API 文档
 ```
 
 ## 10. 依赖 (pyproject.toml)

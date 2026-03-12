@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 import idaapi  # type: ignore
+import ida_kernwin  # type: ignore
 import idc  # type: ignore
 import websocket  # type: ignore
 
@@ -24,6 +25,7 @@ class HubConfig:
     host: str = "127.0.0.1"
     port: int = 10086
     reconnect_interval: float = 5.0
+    auto_connect: bool = False
 
 
 StatusCallback = Callable[[str, str], None]
@@ -53,6 +55,8 @@ class IDAHubClient:
         self._manual_disconnect = False
         self._state = self.STATE_DISCONNECTED
         self._last_error = ""
+        self._retry_on_initial_failure = True
+        self._has_ever_connected = False
 
     @property
     def instance_id(self) -> str:
@@ -73,13 +77,15 @@ class IDAHubClient:
         with self._lock:
             self._config = config
 
-    def connect(self) -> bool:
+    def connect(self, retry_on_initial_failure: bool = True) -> bool:
         with self._lock:
             if self._state in {self.STATE_CONNECTING, self.STATE_CONNECTED}:
                 return False
 
             self._manual_disconnect = False
             self._last_error = ""
+            self._retry_on_initial_failure = retry_on_initial_failure
+            self._has_ever_connected = False
             self._stop_event.clear()
             self._registered_event.clear()
             self._set_state_locked(
@@ -151,6 +157,13 @@ class IDAHubClient:
             if self._stop_event.is_set() or self._manual_disconnect:
                 break
 
+            if not self._retry_on_initial_failure and not self._has_ever_connected:
+                self._set_state(
+                    self.STATE_DISCONNECTED,
+                    self._last_error or "Initial connection failed",
+                )
+                break
+
             message = (
                 f"{self._last_error}; retrying in {self._config.reconnect_interval:g}s"
                 if self._last_error
@@ -208,6 +221,7 @@ class IDAHubClient:
         if message_type == "register_ack":
             self._registered_event.set()
             self._cancel_register_timer()
+            self._has_ever_connected = True
             instance_id = payload.get("instance_id")
             if isinstance(instance_id, str) and instance_id:
                 self._instance_id = instance_id
@@ -286,6 +300,18 @@ class IDAHubClient:
         target.send(message)
 
     def _get_instance_info(self) -> dict[str, str]:
+        info = self._run_in_main_thread(self._collect_instance_info_main_thread)
+        if isinstance(info, dict):
+            return info
+
+        return {
+            "module": "unknown",
+            "db_path": "",
+            "architecture": "unknown",
+            "platform": platform.system().lower(),
+        }
+
+    def _collect_instance_info_main_thread(self) -> dict[str, str]:
         module = self._first_non_empty(
             self._call_ida(lambda: idaapi.get_root_filename()),
             self._call_ida(lambda: idc.get_root_filename()),
@@ -306,6 +332,24 @@ class IDAHubClient:
             "architecture": architecture,
             "platform": platform.system().lower(),
         }
+
+    @staticmethod
+    def _run_in_main_thread(callback: Callable[[], Any]) -> Any:
+        execute_sync = getattr(ida_kernwin, "execute_sync", None)
+        if not callable(execute_sync):
+            return callback()
+
+        holder: dict[str, Any] = {"value": None}
+
+        def run() -> int:
+            holder["value"] = callback()
+            return 1
+
+        try:
+            execute_sync(run, getattr(ida_kernwin, "MFF_FAST", 0))
+        except Exception:
+            return None
+        return holder.get("value")
 
     @staticmethod
     def _first_non_empty(*values: Any) -> str:
