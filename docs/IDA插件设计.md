@@ -11,504 +11,354 @@ ida-chat-plugin/
 ├── ida_chat_plugin.py      # 插件入口（修改）
 ├── ida_hub_client.py       # Hub 客户端（新增）
 ├── ida_chat_core.py        # 核心模块（保留）
-└── ...
+└── config_persistence.py   # 配置持久化（新增）
 ```
 
-## 3. Hub 客户端 (ida_hub_client.py)
+## 3. 连接行为
+
+- **默认不连接**：插件加载后不自动连接 Hub，需用户手动触发
+- **手动连接**：通过菜单按钮连接/断开
+- **配置持久化**：参数保存在插件目录的 JSON 文件中
+
+## 4. 菜单设计
+
+### 4.1 菜单项
+
+| 菜单项 | 快捷键 | 说明 |
+|--------|--------|------|
+| Connect to Hub | - | 连接到 Hub Server |
+| Disconnect from Hub | - | 断开当前连接 |
+| Hub Settings... | - | 打开参数配置对话框 |
+
+### 4.2 菜单状态
+
+| 状态 | Connect | Disconnect | Settings |
+|------|---------|------------|----------|
+| 未连接 | ✓ 启用 | ✗ 禁用 | ✓ 启用 |
+| 已连接 | ✗ 禁用 | ✓ 启用 | ✓ 启用 |
+| 连接中 | ✗ 禁用 | ✗ 禁用 | ✓ 启用 |
+
+## 5. 配置管理
+
+### 5.1 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `host` | `localhost` | Hub Server 主机地址 |
+| `port` | `10086` | Hub Server 端口 |
+| `reconnect_interval` | `5.0` | 重连间隔（秒） |
+
+### 5.2 URL 拼接规则
+
+```
+WebSocket URL = ws://{host}:{port}/ws
+```
+
+示例：
+- `ws://localhost:10086/ws`
+- `ws://192.168.1.100:10086/ws`
+
+### 5.3 配置持久化
+
+**文件位置**：`<插件目录>/.hub_config.json`
+
+**文件格式**：
+```json
+{
+    "host": "localhost",
+    "port": 10086,
+    "reconnect_interval": 5.0
+}
+```
+
+### 5.4 配置对话框 Form
+
+```
+┌─────────────────────────────────────┐
+│  Hub Settings                       │
+├─────────────────────────────────────┤
+│                                     │
+│  Host:        [localhost        ]   │
+│  Port:        [10086            ]   │
+│                                     │
+│  Advanced Settings                  │
+│  Reconnect:   [5.0   ] seconds      │
+│                                     │
+│            [Save]  [Cancel]         │
+└─────────────────────────────────────┘
+```
+
+## 6. Hub 客户端设计 (ida_hub_client.py)
+
+### 6.1 核心类
+
+| 类名 | 职责 |
+|------|------|
+| `HubConfig` | 连接配置（host、port、重连间隔） |
+| `IDAHubClient` | WebSocket 客户端，处理连接、注册、消息收发 |
+
+### 6.2 主要方法
+
+| 方法 | 说明 |
+|------|------|
+| `connect()` | 建立到 Hub 的 WebSocket 连接 |
+| `disconnect()` | 断开连接 |
+| `_build_ws_url()` | 从 host:port 拼接 WebSocket URL |
+| `_get_instance_info()` | 获取当前 IDA 实例信息（用于注册） |
+| `_handle_execute()` | 处理 Hub 下发的执行请求 |
+| `_execute_code()` | 执行 Python 代码并捕获输出 |
+| `_create_context()` | 创建代码执行上下文（db、idaapi 等） |
+
+### 6.3 连接保活
+
+使用 **WebSocket 协议自带的 Ping/Pong 机制**，无需应用层心跳：
+
+```
+websocket-client 配置：
+  ping_interval = 30    # 每 30 秒发送 WebSocket Ping
+  ping_timeout  = 10    # 10 秒内未收到 Pong 则断开
+```
+
+### 6.4 实例信息（注册时发送）
 
 ```python
-"""
-IDA Hub Client - 连接 Hub Server 的 WebSocket 客户端
-"""
-
-import json
-import uuid
-import threading
-import queue
-import websocket
-from typing import Optional, Callable
-from dataclasses import dataclass
-
-@dataclass
-class HubConfig:
-    """Hub 连接配置"""
-    url: str = "ws://localhost:8765/ws"
-    reconnect_interval: float = 5.0
-    heartbeat_interval: float = 30.0
-
-class IDAHubClient:
-    """IDA Hub 客户端"""
-
-    def __init__(self, config: Optional[HubConfig] = None):
-        self.config = config or HubConfig()
-        self.ws: Optional[websocket.WebSocketApp] = None
-        self.instance_id: str = self._generate_id()
-        self.connected: bool = False
-        self.pending_requests: dict[str, queue.Queue] = {}
-        self._stop_event = threading.Event()
-        self._thread: Optional[threading.Thread] = None
-
-    def _generate_id(self) -> str:
-        """生成实例 ID"""
-        return uuid.uuid4().hex[:8]
-
-    def _get_instance_info(self) -> dict:
-        """获取当前 IDA 实例信息（用于注册）"""
-        import idaapi
-
-        # 获取模块信息
-        module_name = idaapi.get_root_filename()
-        db_path = idaapi.get_input_file_path()
-
-        # 获取架构信息
-        info = idaapi.get_inf_structure()
-        arch = self._get_arch_name(info)
-
-        return {
-            "module": module_name,
-            "db_path": db_path,
-            "architecture": arch,
-        }
-
-    def _get_arch_name(self, info) -> str:
-        """获取架构名称"""
-        proc_name = str(info.procname)
-        arch_map = {
-            "metapc": "x86",
-            "ARM": "arm",
-            "ARM64": "aarch64",
-            "PPC": "powerpc",
-            "MIPS": "mips",
-        }
-        return arch_map.get(proc_name, proc_name)
-
-    def connect(self):
-        """连接到 Hub Server"""
-        if self._thread and self._thread.is_alive():
-            return
-
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._thread.start()
-
-    def disconnect(self):
-        """断开连接"""
-        self._stop_event.set()
-        if self.ws:
-            self.ws.close()
-        if self._thread:
-            self._thread.join(timeout=5.0)
-        self.connected = False
-
-    def _run_loop(self):
-        """WebSocket 运行循环"""
-        while not self._stop_event.is_set():
-            try:
-                self._connect_and_run()
-            except Exception as e:
-                print(f"[IDA Hub] Connection error: {e}")
-
-            if not self._stop_event.is_set():
-                import time
-                time.sleep(self.config.reconnect_interval)
-
-    def _connect_and_run(self):
-        """建立连接并运行"""
-        self.ws = websocket.WebSocketApp(
-            self.config.url,
-            on_open=self._on_open,
-            on_message=self._on_message,
-            on_error=self._on_error,
-            on_close=self._on_close
-        )
-        self.ws.run_forever()
-
-    def _on_open(self, ws):
-        """连接建立时发送注册消息"""
-        info = self._get_instance_info()
-
-        register_msg = {
-            "type": "register",
-            "instance_id": self.instance_id,
-            "info": info
-        }
-
-        ws.send(json.dumps(register_msg))
-        print(f"[IDA Hub] Registering as {self.instance_id}")
-
-    def _on_message(self, ws, message):
-        """处理收到的消息"""
-        try:
-            data = json.loads(message)
-            msg_type = data.get("type")
-
-            if msg_type == "register_ack":
-                self.connected = True
-                print(f"[IDA Hub] Connected as {data.get('instance_id')}")
-
-            elif msg_type == "execute":
-                self._handle_execute(data)
-
-            elif msg_type == "heartbeat":
-                ws.send(json.dumps({"type": "heartbeat"}))
-
-        except json.JSONDecodeError:
-            print(f"[IDA Hub] Invalid JSON: {message}")
-
-    def _on_error(self, ws, error):
-        """处理错误"""
-        print(f"[IDA Hub] WebSocket error: {error}")
-        self.connected = False
-
-    def _on_close(self, ws, close_status_code, close_msg):
-        """连接关闭"""
-        print(f"[IDA Hub] Disconnected: {close_status_code} - {close_msg}")
-        self.connected = False
-
-    def _handle_execute(self, data: dict):
-        """处理执行请求"""
-        request_id = data.get("request_id")
-        code = data.get("code")
-
-        result = self._execute_code(code)
-
-        response = {
-            "type": "execute_result",
-            "request_id": request_id,
-            **result
-        }
-
-        if self.ws:
-            self.ws.send(json.dumps(response))
-
-    def _execute_code(self, code: str) -> dict:
-        """执行 Python 代码"""
-        import sys
-        from io import StringIO
-
-        # 捕获输出
-        old_stdout = sys.stdout
-        sys.stdout = captured = StringIO()
-
-        try:
-            # 创建执行上下文
-            context = self._create_context()
-
-            # 执行代码
-            exec(code, context)
-
-            return {
-                "success": True,
-                "output": captured.getvalue(),
-                "error": None
-            }
-
-        except Exception as e:
-            import traceback
-            return {
-                "success": False,
-                "output": captured.getvalue(),
-                "error": f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
-            }
-
-        finally:
-            sys.stdout = old_stdout
-
-    def _create_context(self) -> dict:
-        """创建代码执行上下文"""
-        import idaapi
-        import idautils
-        import idc
-
-        # 创建简化的 db 对象
-        db = IDADatabase()
-
-        return {
-            "idaapi": idaapi,
-            "idautils": idautils,
-            "idc": idc,
-            "db": db,
-            # 常用快捷方式
-            "here": idc.here(),
-        }
-
-
-class IDADatabase:
-    """IDA 数据库封装，提供简化的 API"""
-
-    @property
-    def functions(self):
-        """函数迭代器"""
-        return IDAFunctions()
-
-    @property
-    def strings(self):
-        """字符串迭代器"""
-        import idautils
-        return idautils.Strings()
-
-    @property
-    def module(self):
-        """模块名"""
-        import idaapi
-        return idaapi.get_root_filename()
-
-    @property
-    def segments(self):
-        """段迭代器"""
-        import idautils
-        return idautils.Segments()
-
-    def xrefs(self):
-        """交叉引用"""
-        import idautils
-        return idautils.XrefsTo
-
-
-class IDAFunctions:
-    """函数集合封装"""
-
-    def __iter__(self):
-        import idautils
-        import idaapi
-        for ea in idautils.Functions():
-            yield IDAFunction(ea)
-
-    def __len__(self):
-        import idautils
-        return len(list(idautils.Functions()))
-
-    def get_at(self, ea: int):
-        """获取指定地址的函数"""
-        import idaapi
-        func = idaapi.get_func(ea)
-        if func:
-            return IDAFunction(func.start_ea)
-        return None
-
-    def get_name(self, func) -> str:
-        """获取函数名"""
-        import idc
-        if hasattr(func, 'start_ea'):
-            return idc.get_func_name(func.start_ea)
-        return idc.get_func_name(func)
-
-
-class IDAFunction:
-    """单个函数封装"""
-
-    def __init__(self, ea: int):
-        import idaapi
-        self._func = idaapi.get_func(ea)
-        self.start_ea = self._func.start_ea if self._func else ea
-        self.end_ea = self._func.end_ea if self._func else ea
-
-    @property
-    def name(self) -> str:
-        import idc
-        return idc.get_func_name(self.start_ea)
-
-    @property
-    def size(self) -> int:
-        return self.end_ea - self.start_ea
-
-    def __repr__(self):
-        return f"<Function {self.name} @ {hex(self.start_ea)}>"
+{
+    "module": "calc.exe",
+    "db_path": "C:\\analyses\\calc.exe.i64",
+    "architecture": "x86_64",
+    "platform": "windows"
+}
 ```
 
-## 4. 插件入口修改 (ida_chat_plugin.py)
+| 字段 | 说明 |
+|------|------|
+| `module` | 当前分析的模块名 |
+| `db_path` | IDA 数据库文件路径 |
+| `architecture` | 目标架构（x86_64、arm、aarch64 等） |
+| `platform` | 主机系统类型（`windows`、`linux`、`darwin`） |
+
+## 7. 插件入口修改 (ida_chat_plugin.py)
+
+### 7.1 生命周期
+
+```
+IDA 启动
+    │
+    ▼
+plugin.init() ──► 加载配置
+    │
+    ▼
+用户点击 Connect
+    │
+    ▼
+hub_client.connect() ──► WebSocket 连接 ──► 发送注册消息
+    │
+    ▼
+收到 register_ack ──► 连接成功，显示状态
+    │
+    ▼
+用户关闭 IDA
+    │
+    ▼
+plugin.term() ──► hub_client.disconnect()
+```
+
+## 8. 代码执行机制
+
+### 8.1 线程安全约束
+
+**关键问题**：IDA Pro 的所有 API 操作必须在主线程执行。WebSocket 消息在后台线程接收，不能直接调用 IDA API。
+
+**解决方案**：使用 `ida_kernwin.execute_sync()` 将代码执行调度到主线程。
+
+```
+WebSocket 线程                    主线程
+      │                             │
+      │  收到 execute 消息          │
+      │                             │
+      │  execute_sync(callback) ───►│
+      │                             │  执行代码
+      │                             │  捕获输出
+      │  ◄──── 返回结果 ────────────│
+      │                             │
+      ▼                             ▼
+```
+
+### 8.2 ScriptExecutor 设计
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    IDAHubClient                         │
+│                                                         │
+│  WebSocket 接收 execute 消息                            │
+│            │                                            │
+│            ▼                                            │
+│  script_executor(code)  ◄─── 注入的执行器               │
+│            │                                            │
+│            ▼                                            │
+│  execute_sync(run_script, MFF_FAST)                     │
+│            │                                            │
+│            ▼                                            │
+│  ┌─────────────────────────────────────┐               │
+│  │ run_script():                       │               │
+│  │   1. 重定向 stdout → StringIO       │               │
+│  │   2. exec(code, context)            │  主线程执行    │
+│  │   3. 捕获输出/异常                   │               │
+│  │   4. 返回结果                       │               │
+│  └─────────────────────────────────────┘               │
+│            │                                            │
+│            ▼                                            │
+│  发送 execute_result 消息                               │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 8.3 执行器接口
 
 ```python
-"""
-IDA Chat Plugin - 修改版，添加 Hub 连接功能
-"""
+# 可注入的执行器签名
+ScriptExecutor = Callable[[str], str]
 
-import idaapi
-import ida_kernwin
-from ida_hub_client import IDAHubClient, HubConfig
-
-class IDAChatPlugin(idaapi.plugin_t):
-    """IDA Chat 插件"""
-
-    flags = idaapi.PLUGIN_KEEP
-    comment = "IDA Chat with Hub support"
-    help = "IDA Chat Plugin"
-    wanted_name = "IDA Chat"
-    wanted_hotkey = "Ctrl+Shift+C"
-
-    def __init__(self):
-        self.hub_client: Optional[IDAHubClient] = None
-        self.hub_config = HubConfig()
-
-    def init(self):
-        """插件初始化"""
-        print("[IDA Chat] Plugin loaded")
-        return idaapi.PLUGIN_KEEP
-
-    def run(self, arg):
-        """运行插件"""
-        self._show_main_dialog()
-
-    def term(self):
-        """插件卸载"""
-        if self.hub_client:
-            self.hub_client.disconnect()
-        print("[IDA Chat] Plugin unloaded")
-
-    def _show_main_dialog(self):
-        """显示主对话框"""
-        class MainDialog(ida_kernwin.Form):
-            def __init__(self, plugin):
-                self.plugin = plugin
-                form_str = """
-                IDA Chat
-                <#Hub URL#:{strHubUrl}>
-                <#Status#:{strStatus}>
-                <Connect:{btnConnect}>
-                <Disconnect:{btnDisconnect}>
-                <Config:{btnConfig}>
-                """
-                ida_kernwin.Form.__init__(self, form_str, {
-                    'strHubUrl': ida_kernwin.Form.StringInput(
-                        value=plugin.hub_config.url
-                    ),
-                    'strStatus': ida_kernwin.Form.StringLabel(
-                        value=self._get_status()
-                    ),
-                    'btnConnect': ida_kernwin.Form.ButtonInput(
-                        self._on_connect
-                    ),
-                    'btnDisconnect': ida_kernwin.Form.ButtonInput(
-                        self._on_disconnect
-                    ),
-                    'btnConfig': ida_kernwin.Form.ButtonInput(
-                        self._on_config
-                    ),
-                })
-
-            def _get_status(self) -> str:
-                if self.plugin.hub_client and self.plugin.hub_client.connected:
-                    return f"Connected ({self.plugin.hub_client.instance_id})"
-                return "Disconnected"
-
-            def _on_connect(self, code):
-                url = self.strHubUrl.value
-                self.plugin.hub_config.url = url
-
-                if not self.plugin.hub_client:
-                    self.plugin.hub_client = IDAHubClient(self.plugin.hub_config)
-
-                self.plugin.hub_client.connect()
-
-                # 更新状态显示
-                import time
-                time.sleep(1)  # 等待连接
-                self.strStatus.value = self._get_status()
-
-            def _on_disconnect(self, code):
-                if self.plugin.hub_client:
-                    self.plugin.hub_client.disconnect()
-                self.strStatus.value = self._get_status()
-
-            def _on_config(self, code):
-                self.plugin._show_config_dialog()
-
-        dialog = MainDialog(self)
-        dialog.Execute()
-        dialog.Free()
-
-    def _show_config_dialog(self):
-        """显示配置对话框"""
-        class ConfigDialog(ida_kernwin.Form):
-            def __init__(self, plugin):
-                self.plugin = plugin
-                form_str = """
-                Hub Configuration
-                <#Reconnect Interval (s)#:{strReconnect}>
-                <#Heartbeat Interval (s)#:{strHeartbeat}>
-                <Save:{btnSave}>
-                """
-                ida_kernwin.Form.__init__(self, form_str, {
-                    'strReconnect': ida_kernwin.Form.NumericInput(
-                        tp=ida_kernwin.Form.FT_RAWHEX,
-                        value=int(plugin.hub_config.reconnect_interval)
-                    ),
-                    'strHeartbeat': ida_kernwin.Form.NumericInput(
-                        tp=ida_kernwin.Form.FT_RAWHEX,
-                        value=int(plugin.hub_config.heartbeat_interval)
-                    ),
-                    'btnSave': ida_kernwin.Form.ButtonInput(self._on_save),
-                })
-
-            def _on_save(self, code):
-                self.plugin.hub_config.reconnect_interval = float(self.strReconnect.value)
-                self.plugin.hub_config.heartbeat_interval = float(self.strHeartbeat.value)
-
-        dialog = ConfigDialog(self)
-        dialog.Execute()
-        dialog.Free()
-
-
-def PLUGIN_ENTRY():
-    return IDAChatPlugin()
+# 输入: Python 代码字符串
+# 输出: stdout 捕获的输出（成功时）或错误信息（失败时）
 ```
 
-## 5. 配置持久化
+### 8.4 执行上下文
+
+代码执行时提供的上下文变量：
+
+| 变量 | 类型 | 说明 |
+|------|------|------|
+| `db` | `Database` | ida-domain 数据库对象 |
+| `idaapi` | module | IDA API |
+| `idautils` | module | IDA 工具函数 |
+| `idc` | module | IDA 核心函数 |
+| `ida_kernwin` | module | IDA UI 交互（获取光标、跳转等） |
+
+### 8.5 执行标志
+
+| 标志 | 说明 |
+|------|------|
+| `MFF_FAST` | 快速执行，不等待 UI 刷新 |
+| `MFF_READ` | 只读操作 |
+| `MFF_WRITE` | 写操作（会刷新 UI） |
+
+### 8.6 执行流程
+
+```
+1. WebSocket 收到 {"type": "execute", "request_id": "xxx", "code": "..."}
+                    │
+                    ▼
+2. 调用 script_executor(code)
+                    │
+                    ▼
+3. execute_sync() 调度到主线程
+                    │
+                    ▼
+4. 主线程执行:
+   ├── old_stdout = sys.stdout
+   ├── sys.stdout = StringIO()
+   ├── try:
+   │       exec(code, {"db": db, "ida_kernwin": ida_kernwin, ...})
+   │       output = sys.stdout.getvalue()
+   │   except Exception as e:
+   │       output = f"Error: {e}"
+   │   finally:
+   │       sys.stdout = old_stdout
+                    │
+                    ▼
+5. 发送 {"type": "execute_result", "request_id": "xxx", "success": bool, "output": "..."}
+```
+
+## 9. db 对象 (ida-domain)
+
+使用 `ida-domain` 库提供的统一 API，而不是直接使用 IDA 原生 API。
+
+### 9.1 Database 属性
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `db.path` | str | 输入文件路径 |
+| `db.module` | str | 模块名 |
+| `db.base_address` | ea_t | 镜像基址 |
+| `db.architecture` | str | 处理器架构 |
+| `db.bitness` | int | 位数（32 或 64） |
+
+### 9.2 Entity Handlers
+
+| 处理器 | 说明 |
+|--------|------|
+| `db.functions` | 函数操作 |
+| `db.instructions` | 指令操作 |
+| `db.segments` | 段操作 |
+| `db.bytes` | 字节操作 |
+| `db.strings` | 字符串操作 |
+| `db.names` | 名称操作 |
+| `db.xrefs` | 交叉引用操作 |
+
+### 9.3 常用模式
 
 ```python
-# config_persistence.py
+# 遍历函数
+for func in db.functions:
+    name = db.functions.get_name(func)
+    print(f"{name}: 0x{func.start_ea:08X}")
 
-import json
-import os
+# 按名称查找
+func = db.functions.get_function_by_name("main")
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), ".hub_config.json")
+# 交叉引用
+for xref in db.xrefs.to_ea(0x401000):
+    print(f"From 0x{xref.from_ea:08X}")
 
-def load_config() -> dict:
-    """加载配置"""
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-def save_config(config: dict):
-    """保存配置"""
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=2)
+# 字符串
+for s in db.strings:
+    print(f"0x{s.address:08X}: {s}")
 ```
 
-## 6. 安装与使用
+## 10. WebSocket 消息协议
 
-### 6.1 安装
+### 10.1 发送消息（IDA → Hub）
 
-1. 复制文件到 IDA 插件目录：
-   ```
-   C:\Program Files\IDA 8.3\plugins\
-   或
-   %APPDATA%\Hex-Rays\IDA Pro\plugins\
-   ```
+| 类型 | 触发时机 | 结构 |
+|------|----------|------|
+| `register` | 连接建立时 | `{"type": "register", "instance_id": "xxx", "info": {...}}` |
+| `execute_result` | 代码执行完成 | `{"type": "execute_result", "request_id": "xxx", "success": bool, "output": "...", "error": "..."}` |
 
-2. 安装 Python 依赖：
-   ```bash
-   pip install websocket-client
-   ```
+### 10.2 接收消息（Hub → IDA）
 
-### 6.2 使用
+| 类型 | 处理方式 | 结构 |
+|------|----------|------|
+| `register_ack` | 标记连接成功 | `{"type": "register_ack", "instance_id": "xxx"}` |
+| `execute` | 执行代码并返回结果 | `{"type": "execute", "request_id": "xxx", "code": "..."}` |
 
-1. 启动 IDA 并打开目标文件
-2. 按 `Ctrl+Shift+C` 打开插件
-3. 输入 Hub Server 地址（如 `ws://192.168.1.100:8765/ws`）
-4. 点击 Connect
-5. 在 Claude Code 中使用 `/ida list` 查看已连接实例
+## 11. 错误处理
 
-## 7. 错误处理
-
-| 错误 | 原因 | 解决方案 |
-|------|------|----------|
-| Connection refused | Hub 未启动 | 启动 Hub Server |
-| Register timeout | 网络延迟 | 检查网络连接 |
+| 错误 | 原因 | 处理 |
+|------|------|------|
+| Connection refused | Hub 未启动 | 提示用户检查 Hub Server |
+| Register timeout | 网络延迟 | 自动重连 |
 | WebSocket closed | 连接断开 | 自动重连机制 |
+| Execute error | 代码执行异常 | 返回错误信息和堆栈 |
 
-## 8. 安全注意事项
+## 12. 依赖
+
+```bash
+pip install websocket-client ida-domain
+```
+
+> 注意：IDA Pro 自带的 Python 环境需要手动安装此依赖。
+
+## 13. 安装
+
+复制文件到 IDA 插件目录：
+
+```
+C:\Program Files\IDA 8.3\plugins\
+或
+%APPDATA%\Hex-Rays\IDA Pro\plugins\
+```
+
+## 14. 安全注意事项
 
 - 代码在 IDA 进程中执行，具有完整 IDA API 权限
 - 仅连接可信的 Hub Server

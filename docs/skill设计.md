@@ -2,196 +2,55 @@
 
 ## 1. 概述
 
-为 Claude Code 提供 IDA Hub 交互能力，通过 HTTP API 与 Hub Server 通信。
+为 Claude Code 提供 IDA Hub 交互能力，通过 HTTP API 与 Hub Server 通信，实现远程逆向分析。
 
-## 2. Skill 文件位置
+## 2. 设计理念
+
+借鉴 ida-chat-plugin 的**代理循环（Agentic Loop）**模式：
+
+```
+Claude Code 输出代码 → Hub Server 转发 → IDA 执行 → 返回结果 → Claude Code 继续分析
+```
+
+Agent 自主决定何时需要查询数据库，持续执行直到任务完成。
+
+## 3. Skill 文件位置
 
 ```
 ~/.claude/skills/ida/skill.md
 ```
 
-## 3. Skill 定义
+## 4. Skill 定义
 
 ```markdown
 # IDA Hub Skill
 
 通过 HTTP API 与远程 IDA Hub Server 交互，执行逆向分析任务。
 
-## 使用方式
+## 上下文说明
 
-/ida <command> [args]
+- 当用户说"这个项目"、"当前二进制"、"这个文件"时，指 IDA 中打开的数据库
+- 代码在 IDA 进程中执行，通过 `db` 对象访问数据库
+- 使用 `print()` 输出结果，结果会返回给你
 
-## 命令
+## 首次使用
 
-- `/ida list` - 列出所有已连接的 IDA 实例
-- `/ida info <instance_id>` - 获取实例数据库信息
-- `/ida exec <instance_id> <code>` - 执行 Python 代码
+**重要**：你不知道 Hub Server 的地址，必须询问用户：
 
-## 示例
+> "请提供 IDA Hub Server 的地址（如 http://192.168.1.100:8765），你可以从 Hub 前端的 Config 页面复制。"
 
-/ida list
-/ida info a1b2c3d4
-/ida exec a1b2c3d4 "print(len(db.functions))"
-/ida exec a1b2c3d4 "for func in db.functions:\n    print(db.functions.get_name(func))"
-```
-
-## 4. 环境变量配置
-
-在 `~/.bashrc` 或 `~/.zshrc` 中配置：
-
-```bash
-export IDA_HUB_URL="http://192.168.1.100:8765"
-```
-
-## 5. 命令实现
-
-### 5.1 /ida list
-
-**功能**: 列出所有已连接的 IDA 实例
-
-**实现**:
-```bash
-curl -s "${IDA_HUB_URL:-http://localhost:8765}/api/instances" | jq .
-```
-
-**输出示例**:
-```json
-{
-  "instances": [
-    {
-      "instance_id": "a1b2c3d4",
-      "module": "calc.exe",
-      "architecture": "x86_64",
-      "functions_count": 150,
-      "connected_at": "2026-03-12T10:30:00Z"
-    }
-  ]
-}
-```
-
-### 5.2 /ida info \<instance_id\>
-
-**功能**: 获取指定实例的数据库详细信息
-
-**实现**:
-```bash
-curl -s "${IDA_HUB_URL:-http://localhost:8765}/api/db-info/$INSTANCE_ID" | jq .
-```
-
-**输出示例**:
-```json
-{
-  "instance_id": "a1b2c3d4",
-  "module": "calc.exe",
-  "path": "C:\\analyses\\calc.exe.i64",
-  "architecture": "x86_64",
-  "bitness": 64,
-  "base_address": "0x140000000",
-  "functions_count": 150,
-  "strings_count": 500,
-  "segments": [".text", ".data", ".rdata"]
-}
-```
-
-### 5.3 /ida exec \<instance_id\> \<code\>
-
-**功能**: 在指定实例执行 Python 代码
-
-**实现**:
-```bash
-# URL 编码的 JSON payload
-PAYLOAD=$(echo "{\"instance_id\": \"$INSTANCE_ID\", \"code\": \"$CODE\"}" | jq -c .)
-
-curl -s -X POST "${IDA_HUB_URL:-http://localhost:8765}/api/execute" \
-  -H 'Content-Type: application/json' \
-  -d "$PAYLOAD" | jq .
-```
-
-**输出示例**:
-```json
-{
-  "success": true,
-  "output": "150\n",
-  "error": null
-}
-```
-
-## 6. Python 辅助脚本
-
-创建 `~/bin/ida_client.py` 供 Claude Code 调用：
-
-```python
-#!/usr/bin/env python3
-"""IDA Hub Client - Claude Code 辅助工具"""
-
-import os
-import sys
-import json
-import requests
-
-HUB_URL = os.environ.get("IDA_HUB_URL", "http://localhost:8765")
-
-def list_instances():
-    """列出所有实例"""
-    resp = requests.get(f"{HUB_URL}/api/instances")
-    resp.raise_for_status()
-    return resp.json()
-
-def get_info(instance_id: str):
-    """获取实例信息"""
-    resp = requests.get(f"{HUB_URL}/api/db-info/{instance_id}")
-    resp.raise_for_status()
-    return resp.json()
-
-def execute(instance_id: str, code: str):
-    """执行代码"""
-    resp = requests.post(
-        f"{HUB_URL}/api/execute",
-        json={"instance_id": instance_id, "code": code}
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: ida_client.py <command> [args]")
-        print("Commands: list, info <id>, exec <id> <code>")
-        sys.exit(1)
-
-    cmd = sys.argv[1]
-
-    if cmd == "list":
-        result = list_instances()
-    elif cmd == "info" and len(sys.argv) >= 3:
-        result = get_info(sys.argv[2])
-    elif cmd == "exec" and len(sys.argv) >= 4:
-        result = execute(sys.argv[2], sys.argv[3])
-    else:
-        print(f"Unknown command: {cmd}")
-        sys.exit(1)
-
-    print(json.dumps(result, indent=2))
-
-if __name__ == "__main__":
-    main()
-```
-
-## 7. Skill 完整实现
-
-```markdown
-# IDA Hub Skill
-
-通过 HTTP API 与远程 IDA Hub Server 交互。
+用户会从 Hub Web 界面的 `/config` 页面复制配置信息。
 
 ## 环境要求
 
 - `curl` 命令
 - `jq` 命令（JSON 格式化）
-- 环境变量 `IDA_HUB_URL`（可选，默认 http://localhost:8765）
 
 ## 使用方式
 
 /ida <command> [args]
+
+**注意**：命令中的 `${IDA_HUB_URL}` 需要替换为用户提供的实际地址。
 
 ## 命令
 
@@ -200,15 +59,7 @@ if __name__ == "__main__":
 列出所有已连接的 IDA 实例。
 
 ```bash
-curl -s "${IDA_HUB_URL:-http://localhost:8765}/api/instances" | jq .
-```
-
-### /ida info <instance_id>
-
-获取实例数据库详细信息。
-
-```bash
-curl -s "${IDA_HUB_URL:-http://localhost:8765}/api/db-info/$INSTANCE_ID" | jq .
+curl -s "<HUB_URL>/api/instances" | jq .
 ```
 
 ### /ida exec <instance_id> <code>
@@ -216,83 +67,217 @@ curl -s "${IDA_HUB_URL:-http://localhost:8765}/api/db-info/$INSTANCE_ID" | jq .
 在指定实例执行 Python 代码。
 
 ```bash
-PAYLOAD=$(cat <<EOF
-{"instance_id": "$INSTANCE_ID", "code": "$CODE"}
-EOF
-)
-
-curl -s -X POST "${IDA_HUB_URL:-http://localhost:8765}/api/execute" \
+curl -s -X POST "<HUB_URL>/api/execute" \
   -H 'Content-Type: application/json' \
-  -d "$PAYLOAD" | jq .
+  -d '{"instance_id": "<INSTANCE_ID>", "code": "<CODE>"}' | jq .
 ```
+
+**注意**：将 `<HUB_URL>` 替换为用户提供的 Hub 地址。
+
+## 代理循环
+
+这是一个自主循环：
+1. 你输出代码
+2. 代码在 IDA 中执行
+3. 你看到执行结果（或错误）
+4. 根据结果决定下一步操作
+5. 持续直到任务完成
 
 ## 使用示例
 
+# 首次使用：询问用户 Hub 地址
+# 用户从 Hub 前端 /config 页面复制地址
+
 # 列出实例
-/ida list
+curl -s "http://192.168.1.100:8765/api/instances" | jq .
 
-# 查看实例信息
-/ida info a1b2c3d4
-
-# 获取函数数量
-/ida exec a1b2c3d4 "print(len(db.functions))"
-
-# 遍历函数
-/ida exec a1b2c3d4 "for f in db.functions: print(hex(f.start_ea), db.functions.get_name(f))"
-
-# 搜索字符串
-/ida exec a1b2c3d4 "for s in db.strings: print(hex(s.ea), s)"
+# 获取函数数量（替换 instance_id）
+curl -s -X POST "http://192.168.1.100:8765/api/execute" \
+  -H 'Content-Type: application/json' \
+  -d '{"instance_id": "a1b2c3d4", "code": "print(len(db.functions))"}' | jq .
 ```
 
-## 8. 常用代码片段
+## 5. 执行上下文
 
-### 8.1 函数分析
+代码在 IDA 进程中执行，提供以下上下文：
+
+| 变量 | 类型 | 说明 |
+|------|------|------|
+| `db` | Database | ida-domain 数据库对象 |
+| `idaapi` | module | IDA API |
+| `idautils` | module | IDA 工具函数 |
+| `idc` | module | IDA 核心函数 |
+
+### 5.1 Database 属性
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `db.path` | str | 输入文件路径 |
+| `db.module` | str | 模块名 |
+| `db.base_address` | ea_t | 镜像基址 |
+| `db.architecture` | str | 处理器架构 |
+| `db.bitness` | int | 位数（32 或 64） |
+
+### 5.2 Entity Handlers
+
+| 处理器 | 说明 |
+|--------|------|
+| `db.functions` | 函数操作 |
+| `db.instructions` | 指令操作 |
+| `db.segments` | 段操作 |
+| `db.bytes` | 字节操作 |
+| `db.strings` | 字符串操作 |
+| `db.names` | 名称操作 |
+| `db.comments` | 注释操作 |
+| `db.entries` | 入口点操作 |
+| `db.xrefs` | 交叉引用操作 |
+| `db.types` | 类型操作 |
+
+## 6. 常用 API 模式
+
+### 6.1 函数操作
 
 ```python
-# 列出所有函数名和地址
+# 遍历所有函数
 for func in db.functions:
-    print(hex(func.start_ea), db.functions.get_name(func))
+    name = db.functions.get_name(func)
+    print(f"{name}: 0x{func.start_ea:08X}")
 
-# 获取函数信息
-func = db.functions.get_at(0x140001000)
-print(func.name, func.size, func.flags)
+# 按名称查找
+func = db.functions.get_function_by_name("main")
+
+# 按地址查找
+func = db.functions.get_at(0x401000)
+
+# 获取调用关系
+callers = db.functions.get_callers(func)
+callees = db.functions.get_callees(func)
+
+# 获取伪代码
+pseudo = db.functions.get_pseudocode(func)
 ```
 
-### 8.2 字符串搜索
+### 6.2 字符串操作
 
 ```python
-# 搜索包含 "password" 的字符串
+# 遍历所有字符串
 for s in db.strings:
-    if "password" in str(s).lower():
-        print(hex(s.ea), s)
+    print(f"0x{s.address:08X}: {s}")
+
+# 范围内字符串
+for s in db.strings.get_between(0x401000, 0x500000):
+    print(s)
 ```
 
-### 8.3 交叉引用
+### 6.3 交叉引用
 
 ```python
-# 获取地址的交叉引用
-for xref in db.xrefs.get_xrefs_to(0x140001000):
-    print(hex(xref.frm), hex(xref.to), xref.type)
+# 引用到某地址
+for xref in db.xrefs.to_ea(0x401000):
+    print(f"From 0x{xref.from_ea:08X}")
+
+# 从某地址的引用
+for xref in db.xrefs.from_ea(0x401000):
+    print(f"To 0x{xref.to_ea:08X}")
+
+# 代码引用
+for ea in db.xrefs.code_refs_to_ea(0x401000):
+    print(f"Code ref from 0x{ea:08X}")
+
+# 调用关系
+for ea in db.xrefs.calls_to_ea(0x401000):
+    print(f"Called from 0x{ea:08X}")
 ```
 
-### 8.4 反汇编
+### 6.4 字节操作
 
 ```python
-# 反汇编指定地址
-for insn in db.disasm(0x140001000, 20):
-    print(hex(insn.ea), insn.mnem, insn.op_str)
+# 读取
+byte_val = db.bytes.get_byte_at(0x401000)
+dword_val = db.bytes.get_dword_at(0x401000)
+data = db.bytes.get_bytes_at(0x401000, 100)
+
+# 搜索
+ea = db.bytes.find_bytes_between(b"\x55\x8B\xEC")
+all_matches = db.bytes.find_binary_sequence(b"\x90\x90")
+```
+
+### 6.5 段操作
+
+```python
+for seg in db.segments:
+    name = db.segments.get_name(seg)
+    size = db.segments.get_size(seg)
+    print(f"{name}: 0x{seg.start_ea:08X} ({size} bytes)")
+```
+
+## 7. IDA UI 交互（仅 IDA 内执行时可用）
+
+当用户说"当前位置"、"选中的代码"等时，使用 `ida_kernwin`：
+
+| 函数 | 说明 |
+|------|------|
+| `ida_kernwin.get_screen_ea()` | 获取光标地址 |
+| `ida_kernwin.jumpto(ea)` | 跳转到地址 |
+| `ida_kernwin.read_range_selection(None)` | 获取选中范围 |
+
+```python
+import ida_kernwin
+
+# 获取当前位置
+ea = ida_kernwin.get_screen_ea()
+print(f"Current address: 0x{ea:X}")
+
+# 获取选中范围
+result = ida_kernwin.read_range_selection(None)
+if result[0]:
+    start_ea, end_ea = result[1], result[2]
+    print(f"Selection: 0x{start_ea:X} - 0x{end_ea:X}")
+```
+
+## 8. API 调用流程
+
+```
+Claude Code                 Hub Server                IDA Instance
+    │                           │                          │
+    │  POST /api/execute        │                          │
+    │──────────────────────────►│                          │
+    │                           │   WebSocket Request      │
+    │                           │─────────────────────────►│
+    │                           │                          │
+    │                           │                          │ Execute Code
+    │                           │                          │
+    │                           │   WebSocket Response     │
+    │                           │◄─────────────────────────│
+    │  HTTP Response            │                          │
+    │◄──────────────────────────│                          │
 ```
 
 ## 9. 错误处理
 
 | HTTP 状态码 | 说明 | 处理建议 |
 |-------------|------|----------|
-| 404 | 实例不存在 | 检查 instance_id，使用 /ida list 确认 |
-| 504 | 执行超时 | 代码执行时间过长，简化代码或分步执行 |
+| 404 | 实例不存在 | 使用 /ida list 确认 instance_id |
+| 504 | 执行超时 | 简化代码或分步执行 |
 | 500 | 服务器错误 | 检查 Hub Server 日志 |
 
-## 10. 安全考虑
+代码执行错误会在响应的 `error` 字段返回堆栈信息。
 
-- Hub Server 默认绑定 0.0.0.0，仅在可信局域网使用
+## 10. 配置来源
+
+用户从 Hub 前端 `/config` 页面获取：
+- Hub Server URL
+- instance_id（从实例列表中获取）
+- 可选：预生成的 curl 命令模板
+
+## 11. 安全考虑
+
+- Hub Server 绑定 0.0.0.0，仅在可信局域网使用
 - 无认证机制，不要暴露到公网
 - 代码在 IDA 进程中执行，具有完整 IDA API 权限
+
+## 12. 参考
+
+完整 API 参考：
+- `ida-domain` 文档：https://github.com/nickcano/ida-domain
+- IDA Python API：https://hex-rays.com/products/ida/support/idapython_docs/
