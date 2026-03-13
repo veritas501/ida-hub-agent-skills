@@ -224,6 +224,58 @@ textarea {
   animation: spin 0.8s linear infinite;
 }
 
+/* ── Code editor: Python syntax tokens (vscDarkPlus aligned) ── */
+.code-editor .token.comment,
+.code-editor .token.prolog,
+.code-editor .token.doctype {
+  color: #6a9955;
+  font-style: italic;
+}
+.code-editor .token.keyword {
+  color: #569cd6;
+}
+.code-editor .token.builtin {
+  color: #4ec9b0;
+}
+.code-editor .token.string,
+.code-editor .token.triple-quoted-string {
+  color: #ce9178;
+}
+.code-editor .token.number {
+  color: #b5cea8;
+}
+.code-editor .token.boolean {
+  color: #569cd6;
+}
+.code-editor .token.function {
+  color: #dcdcaa;
+}
+.code-editor .token.operator {
+  color: #d4d4d4;
+}
+.code-editor .token.punctuation {
+  color: #d4d4d4;
+}
+.code-editor .token.class-name {
+  color: #4ec9b0;
+}
+.code-editor .token.decorator {
+  color: #dcdcaa;
+}
+.code-editor .token.constant {
+  color: #4fc1ff;
+}
+
+/* ── Code editor: layout ── */
+.code-editor textarea {
+  outline: none !important;
+}
+.code-editor textarea::selection,
+.code-editor pre::selection,
+.code-editor pre *::selection {
+  background: rgba(43, 108, 238, 0.22);
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

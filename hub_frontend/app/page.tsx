@@ -28,7 +28,7 @@ export default function DashboardPage() {
           <div>
             <p className="app-section-label">Dashboard</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text)] md:text-[30px]">
-              Connected Instances
+              已连接实例
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
               在一个桌面视图中查看当前在线的 IDA
@@ -36,10 +36,10 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="app-subcard flex flex-wrap items-center gap-4 px-4 py-3 lg:justify-end">
+          <div className="app-subcard flex flex-wrap items-start gap-4 px-4 py-3 lg:justify-end">
             <div>
               <p className="app-section-label">Instances</p>
-              <p className="mt-1 text-lg font-semibold text-[var(--text)]">
+              <p className="mt-1 text-sm font-semibold text-[var(--text)]">
                 {instanceCount}
               </p>
             </div>
@@ -50,7 +50,7 @@ export default function DashboardPage() {
             <div>
               <p className="app-section-label">Refresh</p>
               <p className="mt-1 text-sm text-[var(--muted)]">
-                Auto refresh every 5 seconds
+                每 5 秒自动刷新
               </p>
             </div>
           </div>

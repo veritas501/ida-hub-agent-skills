@@ -122,7 +122,7 @@ export default function ConfigPage() {
   return (
     <main className="min-h-screen bg-[var(--bg)]">
       <Header
-        title="Claude Code Configuration"
+        title="Agent Configuration"
         onRefresh={onRefresh}
         refreshing={isRefreshing}
       />
@@ -156,18 +156,18 @@ export default function ConfigPage() {
               <p className="app-section-label">Configuration</p>
             </div>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text)] md:text-[30px]">
-              Generate Claude Code Setup
+              生成 Agent 配置
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              选择可用 IPv4 网卡，查看生成结果并复制，直接用于 Claude Code
+              选择可用 IPv4 网卡，查看生成结果并复制，直接用于 Agent
               或相关脚本。
             </p>
           </div>
 
-          <div className="app-subcard flex flex-wrap items-center gap-4 px-4 py-3 lg:justify-end">
+          <div className="app-subcard flex flex-wrap items-start gap-4 px-4 py-3 lg:justify-end">
             <div>
               <p className="app-section-label">Interfaces</p>
-              <p className="mt-1 text-lg font-semibold text-[var(--text)]">
+              <p className="mt-1 text-sm font-semibold text-[var(--text)]">
                 {interfacesCount}
               </p>
             </div>
@@ -264,9 +264,7 @@ export default function ConfigPage() {
                     2. 预览与复制
                   </h2>
                   <p className="mt-1 text-sm text-[var(--muted)]">
-                    {configData?.port
-                      ? `配置已更新为当前选择，端口：${configData.port}`
-                      : "配置结果将根据所选 IP 实时生成"}
+                    配置结果将根据所选 IP 实时生成
                   </p>
                 </div>
                 <button
@@ -347,7 +345,7 @@ export default function ConfigPage() {
                 <div>
                   <p className="app-section-label mb-2">使用场景</p>
                   <div className="bg-[var(--primary-soft)] rounded-lg p-3 text-[13px] leading-6 text-[var(--primary-strong)] border border-[var(--primary)]/10">
-                    生成的配置可以直接用于配置 Claude Code
+                    生成的配置可以直接用于配置 Agent
                     或作为独立脚本执行，从而与后端的 IDA 实例进行通信。
                   </div>
                 </div>

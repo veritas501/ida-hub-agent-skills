@@ -4,6 +4,7 @@ import { useCallback, useId, useMemo, useRef, useState } from "react";
 
 import { executeCode } from "@/lib/api";
 import type { ExecuteResponse, InstanceInfo } from "@/lib/types";
+import { CodeEditor } from "./CodeEditor";
 
 interface InstanceCardProps {
   instance: InstanceInfo;
@@ -13,7 +14,6 @@ interface InstanceCardProps {
 const DEFAULT_CODE = "print('hello from hub')";
 
 export function InstanceCard({ instance, index }: InstanceCardProps) {
-  const [showInfo, setShowInfo] = useState(false);
   const [showExecute, setShowExecute] = useState(false);
   const [code, setCode] = useState(DEFAULT_CODE);
   const [loading, setLoading] = useState(false);
@@ -30,7 +30,6 @@ export function InstanceCard({ instance, index }: InstanceCardProps) {
     });
   }, []);
 
-  const infoPanelId = useId();
   const executePanelId = useId();
   const displayModule = instance.module || "unknown";
   const connectedAt = useMemo(() => {
@@ -63,8 +62,8 @@ export function InstanceCard({ instance, index }: InstanceCardProps) {
       className="app-card animate-slide-up p-4 md:p-5 opacity-0"
       style={{ animationDelay: `${index * 75}ms` }}
     >
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col gap-5">
+        <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2">
             <span
               className="h-2.5 w-2.5 rounded-full bg-[var(--success)]"
@@ -75,13 +74,61 @@ export function InstanceCard({ instance, index }: InstanceCardProps) {
             </span>
           </div>
 
-          <h3 className="truncate text-xl font-semibold tracking-tight text-[var(--text)] md:text-2xl">
-            {displayModule}
-          </h3>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Review instance details or execute Python code directly on this
-            target.
-          </p>
+          <div className="min-w-0 text-sm text-[var(--muted)]">
+            Instance ID:&nbsp;
+            <code
+              className="app-inline-code cursor-pointer transition-all duration-200 ease-out hover:bg-[#dde4ef] active:scale-[0.98]"
+              style={{ fontFamily: "var(--font-mono)" }}
+              title="Click to copy"
+              role="button"
+              tabIndex={0}
+              onClick={() => copyToClipboard(instance.instance_id, "title")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  copyToClipboard(instance.instance_id, "title");
+                }
+              }}
+            >
+              {copiedField === "title" ? "Copied!" : instance.instance_id}
+            </code>
+          </div>
+
+          <div className="app-subcard mt-4 grid gap-4 p-4 sm:grid-cols-2">
+            <div className="min-w-0">
+              <p className="app-section-label">Module</p>
+              <p
+                className="mt-2 truncate text-sm font-medium text-[var(--text)]"
+                title={displayModule}
+              >
+                {displayModule}
+              </p>
+            </div>
+            <div>
+              <p className="app-section-label">Architecture</p>
+              <p className="mt-2 text-sm font-medium text-[var(--text)]">
+                {instance.architecture || "unknown"}
+              </p>
+            </div>
+            <div>
+              <p className="app-section-label">Platform</p>
+              <p className="mt-2 text-sm font-medium text-[var(--text)]">
+                {instance.platform || "unknown"}
+              </p>
+            </div>
+            <div>
+              <p className="app-section-label">Connected</p>
+              <p className="mt-2 text-sm font-medium text-[var(--text)]">
+                {connectedAt}
+              </p>
+            </div>
+            <div className="min-w-0 sm:col-span-2">
+              <p className="app-section-label">Database Path</p>
+              <p className="mt-2 break-all text-sm font-medium text-[var(--text)]">
+                {instance.db_path || "<empty>"}
+              </p>
+            </div>
+          </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
@@ -90,96 +137,19 @@ export function InstanceCard({ instance, index }: InstanceCardProps) {
               aria-expanded={showExecute}
               aria-controls={executePanelId}
               className="app-btn-primary"
+              title={showExecute ? "Collapse execute panel" : "Open fast execute panel"}
             >
               <span
                 className="material-symbols-outlined text-[18px]"
                 aria-hidden
               >
-                play_arrow
+                {showExecute ? "expand_less" : "play_arrow"}
               </span>
-              <span>Execute</span>
+              <span>{showExecute ? "Collapse" : "Fast Execute"}</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setShowInfo((prev) => !prev)}
-              aria-expanded={showInfo}
-              aria-controls={infoPanelId}
-              className="app-btn-secondary"
-            >
-              <span
-                className="material-symbols-outlined text-[18px]"
-                aria-hidden
-              >
-                info
-              </span>
-              <span>Info</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="app-subcard grid w-full gap-4 p-4 sm:grid-cols-2 xl:max-w-[380px] xl:min-w-[360px]">
-          <div className="min-w-0">
-            <p className="app-section-label">Instance ID</p>
-            <code
-              className="mt-2 block cursor-pointer truncate rounded-lg bg-white px-3 py-2 text-[12px] font-semibold text-[#516079] transition-all duration-200 ease-out hover:bg-[#eef2f8] active:scale-[0.98] border border-[var(--line)] hover:border-gray-300 shadow-sm"
-              style={{ fontFamily: "var(--font-mono)" }}
-              title="Click to copy"
-              role="button"
-              tabIndex={0}
-              onClick={() => copyToClipboard(instance.instance_id, "card")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  copyToClipboard(instance.instance_id, "card");
-                }
-              }}
-            >
-              {copiedField === "card" ? "Copied!" : instance.instance_id}
-            </code>
-          </div>
-          <div>
-            <p className="app-section-label">Architecture</p>
-            <p className="mt-2 text-sm font-medium text-[var(--text)]">
-              {instance.architecture || "unknown"}
-            </p>
-          </div>
-          <div>
-            <p className="app-section-label">Platform</p>
-            <p className="mt-2 text-sm font-medium text-[var(--text)]">
-              {instance.platform || "unknown"}
-            </p>
-          </div>
-          <div>
-            <p className="app-section-label">Connected</p>
-            <p className="mt-2 text-sm font-medium text-[var(--text)]">
-              {connectedAt}
-            </p>
           </div>
         </div>
       </div>
-
-      {showInfo ? (
-        <section
-          id={infoPanelId}
-          className="app-subcard mt-4 p-4 fade-in"
-          aria-label={`Instance details for ${displayModule}`}
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <p className="app-section-label">Module</p>
-              <p className="mt-2 text-sm font-medium text-[var(--text)]">
-                {displayModule}
-              </p>
-            </div>
-            <div>
-              <p className="app-section-label">Database Path</p>
-              <p className="mt-2 break-all text-sm font-medium text-[var(--text)]">
-                {instance.db_path || "<empty>"}
-              </p>
-            </div>
-          </div>
-        </section>
-      ) : null}
 
       {showExecute ? (
         <section
@@ -187,63 +157,20 @@ export function InstanceCard({ instance, index }: InstanceCardProps) {
           className="app-subcard mt-4 space-y-4 p-4 fade-in"
           aria-label={`Execute code on ${displayModule}`}
         >
-          <p className="text-sm text-[var(--muted)]">
-            Target:&nbsp;
-            <span className="font-semibold text-[var(--text)]">
-              {displayModule}
-            </span>
-            &nbsp;
-            <code
-              className="app-inline-code cursor-pointer transition-all duration-200 ease-out hover:bg-[#dde4ef] active:scale-[0.98]"
-              style={{ fontFamily: "var(--font-mono)" }}
-              title="Click to copy"
-              role="button"
-              tabIndex={0}
-              onClick={() => copyToClipboard(instance.instance_id, "exec")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  copyToClipboard(instance.instance_id, "exec");
-                }
-              }}
-            >
-              {copiedField === "exec" ? "Copied!" : instance.instance_id}
-            </code>
-          </p>
-
-          <div className="app-card p-4">
+          <div>
             <label
               htmlFor={`${executePanelId}-code`}
-              className="app-section-label block"
+              className="app-section-label block mb-3"
             >
               Python Code
             </label>
-            <textarea
-              id={`${executePanelId}-code`}
+            <CodeEditor
               value={code}
-              onChange={(event) => setCode(event.target.value)}
-              rows={7}
-              spellCheck={false}
-              className="mt-3 w-full rounded-xl border border-[var(--line-strong)] bg-white p-3 font-mono text-sm text-[var(--text)]"
-              style={{ fontFamily: "var(--font-mono)" }}
+              onChange={setCode}
+              onRun={onExecute}
+              running={loading}
+              id={`${executePanelId}-code`}
             />
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                onClick={onExecute}
-                disabled={loading}
-                aria-busy={loading}
-                className="app-btn-primary min-w-[112px]"
-              >
-                <span
-                  className="material-symbols-outlined text-[18px]"
-                  aria-hidden
-                >
-                  terminal
-                </span>
-                <span>{loading ? "Running..." : "Run"}</span>
-              </button>
-            </div>
           </div>
 
           {errorText ? (
