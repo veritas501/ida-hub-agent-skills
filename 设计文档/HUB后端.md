@@ -16,21 +16,24 @@
 ## 3. 文件结构
 
 ```
-hub/server/
-├── __init__.py
-├── main.py           # FastAPI 应用入口
-├── config.py         # 配置管理
-├── registry.py       # IDA 实例注册表
-├── routes.py         # HTTP API 路由
-├── ws_handler.py     # WebSocket 处理器
-└── models.py         # Pydantic 数据模型
+hub_backend/
+├── pyproject.toml
+└── src/ida_chat_hub/
+    ├── __init__.py
+    ├── main.py           # FastAPI 应用入口
+    ├── config.py         # 配置管理
+    ├── registry.py       # IDA 实例注册表
+    ├── routes.py         # HTTP API 路由
+    ├── ws_handler.py     # WebSocket 处理器
+    ├── network.py        # 网卡与默认 IP
+    └── models.py         # Pydantic 数据模型
 ```
 
 ## 4. 核心模块
 
 ### 4.1 实例注册表 (registry.py)
 
-单例模式，管理所有已连接的 IDA 实例。
+应用级长生命周期对象，管理所有已连接的 IDA 实例。
 
 | 方法 | 说明 |
 |------|------|
@@ -58,6 +61,7 @@ hub/server/
 | 方法 | 端点 | 说明 |
 |------|------|------|
 | GET | `/api/instances` | 列出所有实例 |
+| GET | `/api/network/interfaces` | 获取可用 IPv4 与默认 IP |
 | POST | `/api/execute` | 执行代码 |
 | GET | `/api/config` | 获取配置（供 Claude Code 使用） |
 
@@ -82,6 +86,7 @@ class InstanceInfo(BaseModel):
     module: str          # 模块名
     db_path: str         # 数据库路径
     architecture: str    # 架构
+    platform: str        # windows/linux/darwin
     connected_at: datetime
 ```
 
@@ -96,11 +101,12 @@ class ExecuteResponse(BaseModel):
     success: bool
     output: str | None
     error: str | None
+    request_id: str
 
 class ConfigResponse(BaseModel):
-    hub_url: str
-    curl_examples: dict[str, str]
-    python_helper: str
+    result: str
+    selected_ip: str
+    port: int
 ```
 
 ## 6. WebSocket 消息协议
@@ -135,6 +141,9 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 10086
     debug: bool = False
+    execute_timeout: float = 30.0
+    web_root: str | None = None
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     class Config:
         env_prefix = "IDA_HUB_"
@@ -144,10 +153,10 @@ class Settings(BaseSettings):
 
 ```bash
 # 1. 构建前端
-cd hub/web && npm run build
+cd hub_frontend && npm run build
 
 # 2. 启动服务（单端口）
-cd hub && python run.py --host 0.0.0.0 --port 10086
+cd hub_backend && uv run ida-chat-hub
 
 # 3. 访问
 # http://192.168.1.100:10086/        → 前端

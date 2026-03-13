@@ -1,104 +1,107 @@
-# CLAUDE.md
+# AGENTS.md / CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件用于让后续 Agent 快速理解本仓库用途、结构、约束与常用流程。
+说明：仓库中 `AGENTS.md` 为软链接，指向本文件。
 
-## 项目概述
+## 1. 输出与协作规则
 
-IDA Chat 分布式架构改造项目，实现多个 IDA Pro 实例的统一管理。Claude Code 通过 HTTP API 与运行在 Windows 上的 Hub Server 交互。
+- 必须使用简体中文回复。
+- 风格保持专业、简洁、技术导向，优先给出可执行结论。
+- 先读后改，避免基于猜测修改代码。
+- 代码变更遵循 SOLID、KISS、DRY、YAGNI。
+- 搜索优先使用 `rg`。
+- 注释语言保持与代码库一致（本仓库代码与文档多数为英文，面向用户回复为中文）。
 
-## 架构
+## 2. 高风险操作确认机制
 
-```
-Windows 主机 (局域网)                    Linux 主机
-┌───────────────────────────────────┐   ┌─────────────────┐
-│  Hub Server (FastAPI)             │   │  Claude Code    │
-│  单端口 :10086                      │◄──►│  (curl/python)  │
-│  ├── /        → 前端 SPA          │   └─────────────────┘
-│  ├── /api/*   → HTTP API          │
-│  ├── /ws      → WebSocket (IDA)   │
-│  └── /docs    → API 文档          │
-└───────────────────────────────────┘
-        ▲ WebSocket
-        │
-┌───────┴───────┐
-│ IDA 实例 1..N │  (手动连接，默认 localhost:10086)
-└───────────────┘
-```
+执行以下操作前，必须得到用户明确确认：
+- 删除文件/目录、批量不可逆修改
+- `git commit`、`git push`、`git reset --hard`
+- 系统配置/权限变更
+- 数据库删除或批量更新
+- 发送敏感数据到外部服务
 
-## 设计文档
+确认模板：
 
-| 文档 | 说明 |
-|------|------|
-| `docs/总体架构需求.md` | 系统架构、通信协议、部署流程 |
-| `docs/HUB后端.md` | FastAPI 后端、实例注册表、WebSocket 处理 |
-| `docs/HUB前端.md` | Next.js 前端、静态导出、单端口部署 |
-| `docs/IDA插件设计.md` | IDA 插件、线程安全执行、db 对象 |
-| `docs/skill设计.md` | Claude Code Skill、代理循环模式 |
+```text
+⚠️ 危险操作检测！
+操作类型：[具体操作]
+影响范围：[详细说明]
+风险评估：[潜在后果]
 
-## HTTP API
-
-| 端点 | 说明 |
-|------|------|
-| `GET /api/instances` | 列出已连接的 IDA 实例 |
-| `POST /api/execute` | 在指定实例执行 Python 代码 |
-| `GET /api/config` | 获取 Claude Code 配置（供前端展示） |
-| `WS /ws` | IDA 实例 WebSocket 连接 |
-
-## 代理循环模式
-
-```
-Claude Code 输出代码 → Hub 转发 → IDA 执行 → 返回结果 → Claude Code 继续
+请确认是否继续？[需要明确的"是"、"确认"、"继续"]
 ```
 
-Agent 自主决定查询时机，持续执行直到任务完成。
+## 3. 仓库主要用途
 
-## 代码执行机制
+本项目用于构建 IDA Chat 分布式架构，实现：
+- 多个 IDA Pro 实例统一接入 Hub
+- Hub 提供 HTTP API 与 Web UI
+- 外部 Agent（如 Codex/Claude Code）通过 Hub 下发代码到指定 IDA 实例执行
 
-IDA 插件使用 `ida_kernwin.execute_sync()` 确保线程安全：
+核心通信关系：
+- IDA Plugin ↔ Hub：WebSocket（`/ws`）
+- Frontend ↔ Hub：HTTP（`/api/*`）
+- Agent ↔ Hub：HTTP（`/api/instances`、`/api/execute` 等）
 
+当前主端口口径：`10086`。
+
+## 4. 主要目录结构（当前仓库）
+
+```text
+ida_claw/
+├── ida_plugins/              # IDA 插件实现（当前已重点开发）
+│   ├── ida_multi_chat_entry.py
+│   └── ida_multi_chat/
+│       ├── plugin.py
+│       ├── hub_client.py
+│       ├── core.py
+│       └── config_persistence.py
+├── hub_backend/              # Hub 后端（FastAPI）
+├── hub_frontend/             # Hub 前端（Next.js）
+├── 设计文档/                 # 设计与说明文档
+├── ref/                      # 参考实现与 API 资料（含 ida-domain 参考）
+└── HANDOFF.md                # 阶段性交接文档
 ```
-WebSocket 后台线程               主线程
-        │                          │
-        │ 收到 execute 消息        │
-        │                          │
-        │ execute_sync() ─────────►│ exec(code, context)
-        │                          │ 捕获 stdout
-        │◄───── 返回结果 ──────────│
-```
 
-执行上下文：`db` (ida-domain), `ida_kernwin`, `idaapi`, `idautils`, `idc`
+## 5. 与 IDA 插件相关的关键事实
 
-## API 调用示例
+- 插件入口文件应保持轻量：`ida_plugins/ida_multi_chat_entry.py`。
+- 业务逻辑集中在 `ida_plugins/ida_multi_chat/`。
+- 菜单路径为 `Edit -> IDA Multi Chat -> Connect / Disconnect / Settings`。
+- 连接默认地址应使用 `127.0.0.1:10086`（避免 `localhost` 在部分环境解析异常）。
+- `instance_id` 当前规则为“文件名（规范化）+ 3 位随机数”。
+- 涉及 IDA API/ida-domain 的采集优先在主线程执行（避免后台线程访问导致数据缺失或异常）。
+
+## 6. 常用开发与排查命令
 
 ```bash
-# 列出实例
-curl http://192.168.1.100:10086/api/instances
+# 查看变更
+git status --short
 
-# 执行代码
-curl -X POST http://192.168.1.100:10086/api/execute \
-  -H 'Content-Type: application/json' \
-  -d '{"instance_id": "xxx", "code": "print(len(db.functions))"}'
+# 代码搜索
+rg -n "pattern" .
+
+# 格式化（已获批准前缀）
+uvx ruff format
+
+# 启动后端（按项目实际入口为准）
+cd hub_backend
+python run.py --host 0.0.0.0 --port 10086
 ```
 
-## 技术栈
+## 7. 关键文档入口
 
-| 组件 | 技术 |
-|------|------|
-| 后端 | FastAPI, uvicorn, websockets, pydantic |
-| 前端 | Next.js 14 (静态导出), React 18 |
-| IDA 插件 | websocket-client, ida-domain |
-| 通信 | WebSocket (IDA↔Hub) + HTTP API (Claude↔Hub) |
+- `设计文档/总体架构需求.md`
+- `设计文档/IDA插件设计.md`
+- `设计文档/HUB后端.md`
+- `设计文档/HUB前端.md`
+- `设计文档/skill设计.md`
+- `HANDOFF.md`
+- `ref/ida-chat-plugin/project/API_REFERENCE.md`（ida-domain API 速查）
 
-## 开发命令
+## 8. 工作约束补充
 
-```bash
-# 启动 Hub Server（单端口）
-cd hub && python run.py --host 0.0.0.0 --port 10086
-
-# 构建前端（输出到 hub/web/out/）
-cd hub/web && npm run build
-
-# 访问
-# http://localhost:10086/       → 前端
-# http://localhost:10086/docs   → API 文档
-```
+- 未经用户明确要求，不主动执行 git 提交/分支操作。
+- 若工作区已有用户改动，默认保留，不得擅自回滚。
+- 优先做最小必要改动，避免顺手重构。

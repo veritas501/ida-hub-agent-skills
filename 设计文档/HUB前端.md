@@ -17,7 +17,7 @@
 ## 3. 文件结构
 
 ```
-hub/web/
+hub_frontend/
 ├── app/
 │   ├── layout.tsx           # 根布局
 │   ├── page.tsx             # Dashboard 页面
@@ -98,8 +98,9 @@ hub/web/
 | 函数 | 说明 |
 |------|------|
 | `fetchInstances()` | 获取实例列表 |
+| `fetchNetworkInterfaces()` | 获取可用网卡与默认 IP |
 | `executeCode(request)` | 执行代码 |
-| `fetchConfig()` | 获取配置 |
+| `fetchConfig(ip)` | 按选定 IP 获取配置文案 |
 
 ## 6. 数据类型 (lib/types.ts)
 
@@ -109,6 +110,7 @@ interface InstanceInfo {
   module: string;
   db_path: string;
   architecture: string;
+  platform: string;
   connected_at: string;
 }
 
@@ -119,8 +121,9 @@ interface ExecuteRequest {
 
 interface ExecuteResponse {
   success: boolean;
-  output?: string;
-  error?: string;
+  output: string | null;
+  error: string | null;
+  request_id: string;
 }
 ```
 
@@ -150,9 +153,9 @@ const API_BASE = '/api';  // 相对路径
 
 ```bash
 # 开发模式
-cd hub/web && npm run dev
+cd hub_frontend && npm run dev
 
-# 构建（输出到 hub/web/out/）
+# 构建（输出到 hub_frontend/out/）
 npm run build
 
 # 由 FastAPI 托管，访问
