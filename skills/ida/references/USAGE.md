@@ -5,6 +5,8 @@ the open database and `print()` to return results.
 
 **For the complete API reference, see [API_REFERENCE.md](API_REFERENCE.md).**
 
+**For full Hex-Rays Python API index coverage (L1) and key semantic workflows (L2), see [HEXRAYS.md](HEXRAYS.md).**
+
 ---
 
 ## Script Organization
