@@ -435,18 +435,68 @@ class IDAHubClient:
 
     @staticmethod
     def _get_architecture() -> str:
-        """Best-effort architecture string from IDA inf structure."""
+        """Best-effort architecture string across old/new IDA APIs."""
 
-        if not hasattr(idaapi, "get_inf_structure"):
-            return ""
+        procname = ""
+        if hasattr(idc, "inf_get_procname"):
+            try:
+                procname = str(idc.inf_get_procname() or "").strip()
+            except Exception:
+                procname = ""
 
-        info = idaapi.get_inf_structure()
-        procname = str(getattr(info, "procname", "") or "")
-        if hasattr(info, "is_64bit") and info.is_64bit():
-            return f"{procname}_64" if procname else "64bit"
-        if hasattr(info, "is_32bit") and info.is_32bit():
-            return procname or "32bit"
-        return procname
+        if not procname and hasattr(idc, "get_inf_attr") and hasattr(idc, "INF_PROCNAME"):
+            try:
+                procname = str(idc.get_inf_attr(idc.INF_PROCNAME) or "").strip()
+            except Exception:
+                procname = ""
+
+        info = None
+        if not procname and hasattr(idaapi, "get_inf_structure"):
+            try:
+                info = idaapi.get_inf_structure()
+                procname = str(getattr(info, "procname", "") or "").strip()
+            except Exception:
+                info = None
+                procname = ""
+
+        is_64bit: bool | None = None
+        if hasattr(idc, "__EA64__"):
+            try:
+                is_64bit = bool(idc.__EA64__)
+            except Exception:
+                is_64bit = None
+
+        if (
+            is_64bit is None
+            and hasattr(idc, "get_inf_attr")
+            and hasattr(idc, "INF_LFLAGS")
+            and hasattr(idc, "LFLG_64BIT")
+        ):
+            try:
+                lflags = int(idc.get_inf_attr(idc.INF_LFLAGS))
+                is_64bit = bool(lflags & int(idc.LFLG_64BIT))
+            except Exception:
+                is_64bit = None
+
+        if is_64bit is None and info is not None:
+            try:
+                if hasattr(info, "is_64bit"):
+                    is_64bit = bool(info.is_64bit())
+                elif hasattr(info, "is_32bit"):
+                    is_64bit = not bool(info.is_32bit())
+            except Exception:
+                is_64bit = None
+
+        normalized = procname.lower()
+        if normalized == "metapc":
+            return "x86_64" if is_64bit else "x86"
+        if normalized == "arm":
+            return "aarch64" if is_64bit else "arm"
+        if normalized:
+            return f"{normalized}_64" if is_64bit else normalized
+        if is_64bit is True:
+            return "64bit"
+        return ""
 
     def _start_register_timer(self, ws_app: Any) -> None:
         """Start timeout guard for register_ack."""

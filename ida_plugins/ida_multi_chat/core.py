@@ -14,6 +14,59 @@ import idautils  # type: ignore
 import idc  # type: ignore
 from ida_domain import Database  # type: ignore
 
+# Maximum characters kept in stdout/error output before truncation.
+OUTPUT_BUDGET_CHARS: int = 200_000
+
+# Smaller budget for traceback strings (rarely exceeds this).
+_ERROR_BUDGET_CHARS: int = 50_000
+
+# Marker appended when truncation occurs.
+_TRUNCATION_MARKER = "\n\n[OUTPUT TRUNCATED -- {kept} of {total} chars shown. Refine your script to reduce output.]\n"
+
+
+class _CappedStringIO(io.TextIOBase):
+    """A write-only text stream that silently discards data beyond *cap* chars.
+
+    This avoids unbounded memory growth when user scripts produce massive
+    stdout output, cutting the problem at the source instead of after the fact.
+    """
+
+    __slots__ = ("_parts", "_len", "_cap", "_overflowed")
+
+    def __init__(self, cap: int = OUTPUT_BUDGET_CHARS) -> None:
+        self._parts: list[str] = []
+        self._len: int = 0
+        self._cap: int = cap
+        self._overflowed: bool = False
+
+    # -- TextIOBase interface --------------------------------------------------
+
+    def writable(self) -> bool:  # noqa: D102
+        return True
+
+    def write(self, s: str) -> int:  # noqa: D102
+        if self._len >= self._cap:
+            self._overflowed = True
+            return len(s)
+        remaining = self._cap - self._len
+        if len(s) > remaining:
+            s = s[:remaining]
+            self._overflowed = True
+        self._parts.append(s)
+        self._len += len(s)
+        return len(s)
+
+    # -- Public helpers --------------------------------------------------------
+
+    def getvalue(self) -> str:
+        """Return accumulated output (at most *cap* chars)."""
+        return "".join(self._parts)
+
+    @property
+    def overflowed(self) -> bool:
+        """Whether any data was discarded due to the cap."""
+        return self._overflowed
+
 
 @dataclass
 class ExecutionResult:
@@ -25,6 +78,19 @@ class ExecutionResult:
 
 
 ScriptExecutor = Callable[[str], ExecutionResult]
+
+
+def _apply_output_budget(raw: str, budget: int = OUTPUT_BUDGET_CHARS) -> str:
+    """Truncate *raw* to at most *budget* characters (plus a short marker).
+
+    The returned string may slightly exceed *budget* by the length of the
+    appended truncation marker (~100 chars).  This is intentional so that the
+    caller always receives exactly *budget* chars of real content.
+    """
+
+    if len(raw) <= budget:
+        return raw
+    return raw[:budget] + _TRUNCATION_MARKER.format(kept=budget, total=len(raw))
 
 
 def create_ida_domain_db() -> Any:
@@ -97,7 +163,7 @@ class IDAScriptExecutor:
     def _run_in_main_thread(self, code: str) -> ExecutionResult:
         """Run compiled code and capture stdout/traceback."""
 
-        buffer = io.StringIO()
+        buffer = _CappedStringIO()
         context = build_execution_context()
 
         try:
@@ -105,8 +171,21 @@ class IDAScriptExecutor:
             with redirect_stdout(buffer):
                 exec(compile(code, "<ida_hub>", "exec"), context, context)
         except Exception:
-            output = buffer.getvalue()
-            error = traceback.format_exc()
+            output = self._finalize_output(buffer)
+            error = _apply_output_budget(
+                traceback.format_exc(), budget=_ERROR_BUDGET_CHARS
+            )
             return ExecutionResult(success=False, output=output, error=error)
 
-        return ExecutionResult(success=True, output=buffer.getvalue())
+        return ExecutionResult(success=True, output=self._finalize_output(buffer))
+
+    @staticmethod
+    def _finalize_output(buffer: _CappedStringIO) -> str:
+        """Extract output from *buffer*, appending a truncation notice if it overflowed."""
+
+        output = buffer.getvalue()
+        if buffer.overflowed:
+            output += _TRUNCATION_MARKER.format(
+                kept=len(output), total=f"{buffer._cap}+"
+            )
+        return output

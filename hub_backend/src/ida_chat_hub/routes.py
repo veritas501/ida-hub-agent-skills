@@ -20,6 +20,63 @@ from .registry import InstanceRegistry
 logger = logging.getLogger(__name__)
 
 
+def _build_config_markdown(hub_url: str, example_instance: str) -> str:
+    """Build the Markdown configuration guide for /api/config."""
+
+    return (
+        "# IDA Hub — Recommended Setup\n\n"
+        "## Python Helper (Recommended)\n\n"
+        "Save this as a local script and adjust `BASE_URL` / `INSTANCE_ID`.\n\n"
+        "```python\n"
+        "import textwrap\n\n"
+        "import requests\n\n"
+        f'BASE_URL = "{hub_url}"\n'
+        'INSTANCE_ID = "replace-me"  # Get from list_instances()\n\n\n'
+        "def list_instances(timeout=10):\n"
+        f'    resp = requests.get(f"{{BASE_URL}}/api/instances", timeout=timeout)\n'
+        "    resp.raise_for_status()\n"
+        "    return resp.json()\n\n\n"
+        "def execute(code, timeout=30):\n"
+        "    resp = requests.post(\n"
+        f'        f"{{BASE_URL}}/api/execute",\n'
+        '        json={"instance_id": INSTANCE_ID, "code": textwrap.dedent(code).strip()},\n'
+        "        timeout=timeout,\n"
+        "    )\n"
+        "    resp.raise_for_status()\n"
+        "    data = resp.json()\n"
+        '    if not data["success"]:\n'
+        '        raise RuntimeError(data.get("error") or "Execution failed")\n'
+        '    return data["output"]\n'
+        "```\n\n"
+        "### Usage Example\n\n"
+        "```python\n"
+        "# 1. List instances\n"
+        "print(list_instances())\n\n"
+        "# 2. Execute analysis script\n"
+        'report = execute("""\n'
+        "    import json\n"
+        "    funcs = []\n"
+        "    for func in db.functions:\n"
+        "        name = db.functions.get_name(func)\n"
+        '        funcs.append({"name": name, "start": f"0x{func.start_ea:08X}"})\n'
+        '    print(json.dumps({"total": len(funcs), "top": funcs[:10]}, indent=2))\n'
+        '""")\n'
+        "print(report)\n"
+        "```\n\n"
+        "## Quick Check (curl fallback)\n\n"
+        "```bash\n"
+        "# List instances\n"
+        f"curl -s {hub_url}/api/instances\n\n"
+        "# Execute code\n"
+        f"curl -s -X POST {hub_url}/api/execute \\\n"
+        "  -H 'Content-Type: application/json' \\\n"
+        f"  -d '{{\"instance_id\": \"{example_instance}\", \"code\": \"print(42)\"}}'\n"
+        "```\n\n"
+        "## Instances\n\n"
+        f"[View connected instances]({hub_url}/api/instances)\n"
+    )
+
+
 def create_api_router(
     registry: InstanceRegistry,
     settings: Settings,
@@ -117,21 +174,7 @@ def create_api_router(
 
         hub_url = f"http://{selected_ip}:{settings.port}"
         logger.info("Get config selected_ip=%s port=%s", selected_ip, settings.port)
-        example_instance = "a1b2c3d4"
-        markdown = (
-            "# List instances\n"
-            f"curl {hub_url}/api/instances\n\n"
-            "# Execute code\n"
-            "curl -X POST "
-            f"{hub_url}/api/execute "
-            "-H 'Content-Type: application/json' "
-            f'-d \'{{"instance_id": "{example_instance}", "code": "print(42)"}}\'\n\n'
-            "# Python helper\n"
-            "import requests\n\n"
-            f"BASE = '{hub_url}'\n"
-            "resp = requests.get(f'{BASE}/api/instances', timeout=5)\n"
-            "print(resp.json())\n"
-        )
+        markdown = _build_config_markdown(hub_url, example_instance="a1b2c3d4")
 
         return ConfigResponse(
             result=markdown,

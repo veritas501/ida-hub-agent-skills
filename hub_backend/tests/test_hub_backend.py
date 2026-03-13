@@ -47,8 +47,21 @@ def test_network_interfaces_and_config_markdown() -> None:
         config_payload = config_response.json()
         assert config_payload["selected_ip"] == selected_ip
         assert config_payload["port"] == 10086
-        assert "# List instances" in config_payload["result"]
-        assert f"http://{selected_ip}:10086/api/instances" in config_payload["result"]
+
+        result_text = config_payload["result"]
+
+        # Python helper is the primary recommended path
+        assert "## Python Helper (Recommended)" in result_text
+        assert "def list_instances(" in result_text
+        assert "def execute(" in result_text
+        assert "BASE_URL" in result_text
+        assert f"http://{selected_ip}:10086" in result_text
+
+        # curl is explicitly labeled as fallback
+        assert "curl fallback" in result_text
+
+        # Instances link is present and correct
+        assert f"http://{selected_ip}:10086/api/instances" in result_text
 
 
 def test_register_and_list_instances() -> None:
