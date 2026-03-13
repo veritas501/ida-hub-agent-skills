@@ -173,12 +173,12 @@ ida_claw/
 ├── ida_plugins/
 │   ├── ida_multi_chat_entry.py   # 插件入口
 │   └── ida_multi_chat/           # 插件主体代码
-└── 设计文档/                     # 设计文档
-    ├── 总体架构需求.md
-    ├── HUB后端.md
-    ├── HUB前端.md
-    ├── skill设计.md
-    └── IDA插件设计.md
+└── docs/                         # Design docs
+    ├── requirements.md
+    ├── hub-backend.md
+    ├── hub-frontend.md
+    ├── skills.md
+    └── ida-plugin.md
 ```
 
 ## 7. 部署流程

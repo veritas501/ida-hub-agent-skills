@@ -71,4 +71,4 @@ Required correlation field:
 - `hub_frontend/DEV.md`
 - `ida_plugins/DEV.md`
 - `skills/DEV.md`
-- `设计文档/*`
+- `docs/*`

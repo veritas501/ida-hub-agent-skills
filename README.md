@@ -90,7 +90,7 @@ ida_claw/
 ├── hub_backend/      # FastAPI hub
 ├── hub_frontend/     # Next.js frontend
 ├── skills/           # Agent skills and references
-├── 设计文档/         # architecture/design docs
+├── docs/             # architecture/design docs
 └── ref/              # external references
 ```
 
@@ -115,9 +115,9 @@ ida_claw/
 
 ## More docs
 
-- `设计文档/总体架构需求.md`
-- `设计文档/IDA插件设计.md`
-- `设计文档/HUB后端.md`
-- `设计文档/HUB前端.md`
-- `设计文档/skill设计.md`
+- `docs/requirements.md`
+- `docs/ida-plugin.md`
+- `docs/hub-backend.md`
+- `docs/hub-frontend.md`
+- `docs/skills.md`
 - `skills/README.md`

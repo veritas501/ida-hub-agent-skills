@@ -59,7 +59,7 @@ ida_claw/
 │       └── config_persistence.py
 ├── hub_backend/              # Hub 后端（FastAPI）
 ├── hub_frontend/             # Hub 前端（Next.js）
-├── 设计文档/                 # 设计与说明文档
+├── docs/                     # 设计与说明文档
 ├── ref/                      # 参考实现与 API 资料（含 ida-domain 参考）
 └── HANDOFF.md                # 阶段性交接文档
 ```
@@ -92,11 +92,11 @@ python run.py --host 0.0.0.0 --port 10086
 
 ## 7. 关键文档入口
 
-- `设计文档/总体架构需求.md`
-- `设计文档/IDA插件设计.md`
-- `设计文档/HUB后端.md`
-- `设计文档/HUB前端.md`
-- `设计文档/skill设计.md`
+- `docs/requirements.md`
+- `docs/ida-plugin.md`
+- `docs/hub-backend.md`
+- `docs/hub-frontend.md`
+- `docs/skills.md`
 - `HANDOFF.md`
 - `ref/ida-chat-plugin/project/API_REFERENCE.md`（ida-domain API 速查）
 
