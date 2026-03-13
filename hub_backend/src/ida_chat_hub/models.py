@@ -1,8 +1,25 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, Field
+
+
+EXECUTE_CODE_MAX_CHARS = 10_000_000
+
+
+class WSCloseCode(int, Enum):
+    REPLACED = 4000
+    REGISTER_REQUIRED = 4001
+    REGISTER_TIMEOUT = 4002
+
+
+class WSMessageType(str, Enum):
+    REGISTER = "register"
+    REGISTER_ACK = "register_ack"
+    EXECUTE = "execute"
+    EXECUTE_RESULT = "execute_result"
 
 
 class InstanceMeta(BaseModel):
@@ -23,7 +40,7 @@ class InstanceInfo(BaseModel):
 
 class ExecuteRequest(BaseModel):
     instance_id: str = Field(min_length=1)
-    code: str
+    code: str = Field(max_length=EXECUTE_CODE_MAX_CHARS)  # 10M characters limit
 
 
 class ExecuteResponse(BaseModel):

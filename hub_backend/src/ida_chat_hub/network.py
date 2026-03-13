@@ -46,7 +46,9 @@ def list_ipv4_interfaces() -> list[IPv4Interface]:
     for item in items:
         unique[(item.name, item.ipv4)] = item
 
-    return sorted(unique.values(), key=lambda x: (x.is_loopback, x.name.lower(), x.ipv4))
+    return sorted(
+        unique.values(), key=lambda x: (x.is_loopback, x.name.lower(), x.ipv4)
+    )
 
 
 def detect_outbound_ipv4() -> str | None:

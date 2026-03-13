@@ -8,7 +8,13 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from .models import ExecuteResultMessage, InstanceInfo, InstanceMeta
+from .models import (
+    ExecuteResultMessage,
+    InstanceInfo,
+    InstanceMeta,
+    WSCloseCode,
+    WSMessageType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +47,9 @@ class InstanceRegistry:
 
         if old is not None and old.websocket is not websocket:
             logger.warning("Instance replaced instance_id=%s", instance_id)
-            await old.websocket.close(code=4000, reason="Replaced by newer session")
+            await old.websocket.close(
+                code=WSCloseCode.REPLACED, reason="Replaced by newer session"
+            )
         logger.info("Instance registered instance_id=%s", instance_id)
 
     async def unregister(self, instance_id: str) -> None:
@@ -95,7 +103,7 @@ class InstanceRegistry:
             )
             await target.websocket.send_json(
                 {
-                    "type": "execute",
+                    "type": WSMessageType.EXECUTE,
                     "request_id": request_id,
                     "code": code,
                 }

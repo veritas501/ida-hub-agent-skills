@@ -67,15 +67,10 @@ def create_api_router(
                 payload.instance_id,
                 request_id,
             )
-            raise HTTPException(status_code=404, detail=f"Instance not found: {exc.args[0]}")
-        except TimeoutError:
-            logger.warning(
-                "Execute timeout instance_id=%s request_id=%s",
-                payload.instance_id,
-                request_id,
+            raise HTTPException(
+                status_code=404, detail=f"Instance not found: {exc.args[0]}"
             )
-            raise HTTPException(status_code=504, detail="Execute timed out")
-        except asyncio.TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             logger.warning(
                 "Execute timeout instance_id=%s request_id=%s",
                 payload.instance_id,
@@ -112,7 +107,9 @@ def create_api_router(
         )
 
     @router.get("/config", response_model=ConfigResponse)
-    async def get_config(ip: str | None = Query(default=None, description="Hub host IP")) -> ConfigResponse:
+    async def get_config(
+        ip: str | None = Query(default=None, description="Hub host IP"),
+    ) -> ConfigResponse:
         selected_ip = ip if ip else default_ip
         if selected_ip not in available_ips:
             logger.warning("Get config invalid ip=%s", selected_ip)
@@ -128,7 +125,7 @@ def create_api_router(
             "curl -X POST "
             f"{hub_url}/api/execute "
             "-H 'Content-Type: application/json' "
-            f"-d '{{\"instance_id\": \"{example_instance}\", \"code\": \"print(42)\"}}'\n\n"
+            f'-d \'{{"instance_id": "{example_instance}", "code": "print(42)"}}\'\n\n'
             "# Python helper\n"
             "import requests\n\n"
             f"BASE = '{hub_url}'\n"

@@ -1,52 +1,33 @@
-# ida_claw
+# ida-hub-agent-skills
 
-面向 IDA Pro 的分布式执行与管理方案：多个 IDA 实例连接到 Hub，外部 Agent 通过 HTTP API 将 Python 代码下发到指定实例执行。
+中文文档请见: [README_CN.md](README_CN.md)
 
-## 核心能力
+A distributed workflow for reverse engineering with IDA Pro:
 
-- 多实例管理：统一接入多个 IDA Pro 实例
-- 远程执行：通过 `/api/execute` 在目标 IDA 实例执行代码
-- 单端口服务：Hub 后端托管 API、WebSocket、前端静态页面（默认 `10086`）
-- 交互闭环：`Agent -> Hub -> IDA -> Hub -> Agent`
+- connect multiple IDA instances to one Hub
+- let Agents call Hub APIs
+- run skill-like Python analysis code inside a selected IDA instance
 
-## 架构概览
+## Who is this for
 
-- IDA Plugin <-> Hub：WebSocket（`/ws`）
-- Frontend <-> Hub：HTTP（`/api/*`）
-- Agent（Codex/Claude Code）<-> Hub：HTTP（`/api/instances`、`/api/execute`、`/api/config`）
+- reverse engineers using IDA Pro
+- teams that want centralized multi-instance control
+- Agent workflows that need repeatable, API-driven analysis
 
-默认建议：
+## How it works
 
-- Hub 监听：`0.0.0.0:10086`
-- 插件默认连接：`127.0.0.1:10086`（避免 `localhost` 在部分环境解析异常）
+- `IDA Plugin <-> Hub`: WebSocket (`/ws`)
+- `Agent <-> Hub`: HTTP (`/api/instances`, `/api/execute`, `/api/config`)
+- `Frontend <-> Hub`: HTTP (`/api/*`)
 
-## 仓库结构
+Default endpoint convention:
 
-```text
-ida_claw/
-├── ida_plugins/             # IDA 插件（当前重点）
-│   ├── ida_multi_chat_entry.py
-│   ├── requirements.txt
-│   └── ida_multi_chat/
-│       ├── plugin.py
-│       ├── hub_client.py
-│       ├── core.py
-│       └── config_persistence.py
-├── hub_backend/             # FastAPI Hub 后端
-│   ├── pyproject.toml
-│   ├── src/ida_chat_hub/
-│   └── tests/
-├── hub_frontend/            # Next.js 前端
-├── skills/                  # Agent 技能定义
-├── 设计文档/                # 设计文档
-├── ref/                     # 参考实现/API 资料
-├── HANDOFF.md               # 阶段交接说明
-└── CLAUDE.md                # Agent 协作约束（AGENTS.md 软链指向）
-```
+- Hub: `0.0.0.0:10086`
+- IDA plugin default target: `127.0.0.1:10086`
 
-## 快速启动
+## Quick start
 
-### 1) 启动 Hub 后端
+### 1. Start Hub backend
 
 ```bash
 cd hub_backend
@@ -54,59 +35,46 @@ uv sync --group dev
 uv run ida-chat-hub
 ```
 
-启动后可访问：
+Check:
 
-- `http://127.0.0.1:10086/`（若存在 `hub_frontend/out` 将返回前端，否则返回服务信息）
-- `http://127.0.0.1:10086/docs`
 - `http://127.0.0.1:10086/healthz`
+- `http://127.0.0.1:10086/docs`
 
-### 2) 构建/运行前端（可选）
-
-开发模式：
+### 2. (Optional) Build frontend
 
 ```bash
 cd hub_frontend
 npm install
-npm run dev
-```
-
-构建静态站点（供 Hub 托管）：
-
-```bash
-cd hub_frontend
 npm run build
 ```
 
-构建产物位于 `hub_frontend/out`，Hub 默认会自动尝试托管该目录。
+If `hub_frontend/out` exists, Hub serves it automatically.
 
-### 3) 安装并启用 IDA 插件
+### 3. Install IDA plugin
 
-将以下内容放入 IDA 插件目录：
+Copy to your IDA `plugins` directory:
 
 - `ida_plugins/ida_multi_chat_entry.py`
 - `ida_plugins/ida_multi_chat/`
 
-在 IDA Python 环境安装依赖：
+Install plugin dependencies in IDA Python environment:
 
 ```bash
 pip install -r ida_plugins/requirements.txt
 ```
 
-重启 IDA 后，菜单路径：
+Then restart IDA.
 
-- `Edit -> IDA Multi Chat -> Connect`
-- `Edit -> IDA Multi Chat -> Disconnect`
-- `Edit -> IDA Multi Chat -> Settings`
+For plugin-level setup details, see:
 
-## API 快速示例
+- [ida_plugins/README.md](ida_plugins/README.md)
+- [ida_plugins/README_CN.md](ida_plugins/README_CN.md)
 
-列出实例：
+### 4. Verify from API
 
 ```bash
 curl -s "http://127.0.0.1:10086/api/instances"
 ```
-
-执行代码：
 
 ```bash
 curl -s -X POST "http://127.0.0.1:10086/api/execute" \
@@ -114,47 +82,38 @@ curl -s -X POST "http://127.0.0.1:10086/api/execute" \
   -d '{"instance_id":"<INSTANCE_ID>","code":"print(42)"}'
 ```
 
-获取配置文案：
+## Repository layout
 
-```bash
-curl -s "http://127.0.0.1:10086/api/config"
+```text
+ida_claw/
+├── ida_plugins/      # IDA plugin
+├── hub_backend/      # FastAPI hub
+├── hub_frontend/     # Next.js frontend
+├── skills/           # Agent skills and references
+├── 设计文档/         # architecture/design docs
+└── ref/              # external references
 ```
 
-## 插件执行上下文
+## Common issues
 
-Hub 下发的 Python 代码在 IDA 进程中执行，常用变量：
+- `404 Instance not found`
+  - confirm instance id from `/api/instances`
+- `504 Execute timed out`
+  - reduce script workload or increase `IDA_HUB_EXECUTE_TIMEOUT`
+- plugin menu not shown
+  - verify plugin files are in IDA `plugins` and restart IDA
 
-- `db`（ida-domain Database）
-- `idaapi`
-- `idautils`
-- `idc`
-- `ida_kernwin`
+## Environment variables (Hub)
 
-说明：涉及 IDA API/ida-domain 的采集优先在主线程执行（插件通过 `execute_sync` 调度）。
+- `IDA_HUB_HOST` (default: `0.0.0.0`)
+- `IDA_HUB_PORT` (default: `10086`)
+- `IDA_HUB_DEBUG` (default: `false`)
+- `IDA_HUB_EXECUTE_TIMEOUT` (default: `30.0`)
+- `IDA_HUB_CORS_ORIGINS` (comma-separated)
+- `IDA_HUB_DEV_MODE` (default: `false`) - enable dev proxy mode
+- `IDA_HUB_DEV_PROXY_URL` (default: `http://127.0.0.1:3000`) - Next.js dev server URL
 
-## 环境变量（Hub）
-
-- `IDA_HUB_HOST`（默认 `0.0.0.0`）
-- `IDA_HUB_PORT`（默认 `10086`）
-- `IDA_HUB_DEBUG`（默认 `false`）
-- `IDA_HUB_EXECUTE_TIMEOUT`（默认 `30.0` 秒）
-- `IDA_HUB_WEB_ROOT`（可选，覆盖默认静态目录）
-- `IDA_HUB_CORS_ORIGINS`（逗号分隔）
-
-## 当前状态
-
-- IDA 插件首版已实现并可联通 Hub 协议
-- Hub 后端/前端骨架已落地，可用于实例管理与代码执行
-- 详细阶段信息见 `HANDOFF.md`
-
-## 常见排查
-
-- `404 Instance not found`：先调用 `/api/instances` 确认 `instance_id`
-- `504 Execute timed out`：缩短脚本执行时间或提高 `IDA_HUB_EXECUTE_TIMEOUT`
-- IDA 无菜单项：检查插件路径与依赖安装是否完整
-- 页面为空：确认是否已构建 `hub_frontend/out`
-
-## 关键文档
+## More docs
 
 - `设计文档/总体架构需求.md`
 - `设计文档/IDA插件设计.md`
@@ -162,4 +121,3 @@ Hub 下发的 Python 代码在 IDA 进程中执行，常用变量：
 - `设计文档/HUB前端.md`
 - `设计文档/skill设计.md`
 - `skills/README.md`
-- `HANDOFF.md`

@@ -23,3 +23,9 @@ venv/
 *.swp
 
 /ref
+
+# Local helper scripts
+/git_push.sh
+
+# Frontend build output embedded in Python package
+hub_backend/src/ida_chat_hub/static/
