@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -22,7 +21,13 @@ type ToastState = {
 
 const TOAST_DURATION_MS = 2000;
 
-function CodeBlockCopyButton({ text, onCopy }: { text: string; onCopy: () => void }) {
+function CodeBlockCopyButton({
+  text,
+  onCopy,
+}: {
+  text: string;
+  onCopy: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -32,7 +37,7 @@ function CodeBlockCopyButton({ text, onCopy }: { text: string; onCopy: () => voi
         onCopy();
         setTimeout(() => setCopied(false), 2000);
       }}
-      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-600/50 bg-slate-700/50 text-slate-300 transition-all hover:bg-slate-600 hover:text-white"
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-600/50 bg-slate-700/50 text-slate-300 transition-all duration-200 ease-out hover:bg-slate-600 hover:text-white active:scale-[0.95]"
       title="Copy code"
       aria-label="Copy code"
     >
@@ -49,8 +54,11 @@ export default function ConfigPage() {
     error: interfacesError,
     isLoading: interfacesLoading,
     mutate: mutateInterfaces,
-    isValidating: interfacesValidating
-  } = useSWR<NetworkInterfacesResponse>("network/interfaces", fetchNetworkInterfaces);
+    isValidating: interfacesValidating,
+  } = useSWR<NetworkInterfacesResponse>(
+    "network/interfaces",
+    fetchNetworkInterfaces,
+  );
 
   const [selectedIp, setSelectedIp] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
@@ -67,8 +75,10 @@ export default function ConfigPage() {
     error: configError,
     isLoading: configLoading,
     mutate: mutateConfig,
-    isValidating: configValidating
-  } = useSWR<ConfigResponse>(selectedIp ? `config/${selectedIp}` : null, () => fetchConfig(selectedIp));
+    isValidating: configValidating,
+  } = useSWR<ConfigResponse>(selectedIp ? `config/${selectedIp}` : null, () =>
+    fetchConfig(selectedIp),
+  );
 
   const [isCopiedAll, setIsCopiedAll] = useState(false);
 
@@ -95,7 +105,7 @@ export default function ConfigPage() {
       configData.curl_examples?.execute ?? "",
       "",
       "# Python helper",
-      configData.python_helper ?? ""
+      configData.python_helper ?? "",
     ].join("\n");
   }, [configData]);
 
@@ -135,10 +145,14 @@ export default function ConfigPage() {
 
   return (
     <main className="min-h-screen bg-[var(--bg)]">
-      <Header title="Claude Code Configuration" onRefresh={onRefresh} refreshing={isRefreshing} />
+      <Header
+        title="Claude Code Configuration"
+        onRefresh={onRefresh}
+        refreshing={isRefreshing}
+      />
 
       {toast ? (
-        <div className="pointer-events-none fixed bottom-8 left-1/2 z-50 max-w-xs -translate-x-1/2 fade-in">
+        <div className="pointer-events-none fixed bottom-8 left-1/2 z-50 max-w-xs animate-toast">
           <div
             role={toast.type === "error" ? "alert" : "status"}
             aria-live={toast.type === "error" ? "assertive" : "polite"}
@@ -159,32 +173,37 @@ export default function ConfigPage() {
         </div>
       ) : null}
 
-      <section className="mx-auto w-full max-w-6xl space-y-6 px-4 py-7 sm:px-6">
+      <section className="mx-auto w-full max-w-6xl space-y-6 px-4 py-7 sm:px-6 animate-slide-up">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <Link href="/" className="text-[var(--muted)] hover:text-[var(--text)] transition-colors" title="返回 Dashboard">
-                <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-              </Link>
               <p className="app-section-label">Configuration</p>
             </div>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text)] md:text-[30px]">
               Generate Claude Code Setup
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              选择可用 IPv4 网卡，查看生成结果并复制，直接用于 Claude Code 或相关脚本。
+              选择可用 IPv4 网卡，查看生成结果并复制，直接用于 Claude Code
+              或相关脚本。
             </p>
           </div>
 
           <div className="app-subcard flex flex-wrap items-center gap-4 px-4 py-3 lg:justify-end">
             <div>
               <p className="app-section-label">Interfaces</p>
-              <p className="mt-1 text-lg font-semibold text-[var(--text)]">{interfacesCount}</p>
+              <p className="mt-1 text-lg font-semibold text-[var(--text)]">
+                {interfacesCount}
+              </p>
             </div>
-            <div className="hidden h-10 w-px bg-[var(--line)] sm:block" aria-hidden />
+            <div
+              className="hidden h-10 w-px bg-[var(--line)] sm:block"
+              aria-hidden
+            />
             <div>
               <p className="app-section-label">Selected IP</p>
-              <p className="mt-1 text-sm font-medium text-[var(--text)]">{selectedIp || "Waiting..."}</p>
+              <p className="mt-1 text-sm font-medium text-[var(--text)]">
+                {selectedIp || "Waiting..."}
+              </p>
             </div>
           </div>
         </div>
@@ -194,9 +213,12 @@ export default function ConfigPage() {
             <section className="app-card p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-[var(--text)]">1. 选择 IPv4 网卡</h2>
+                  <h2 className="text-lg font-semibold text-[var(--text)]">
+                    1. 选择 IPv4 网卡
+                  </h2>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                    选择一个可被其他设备或本机插件访问的 IPv4 地址。默认会优先使用后端推荐的地址。
+                    选择一个可被其他设备或本机插件访问的 IPv4
+                    地址。默认会优先使用后端推荐的地址。
                   </p>
                 </div>
                 <div className="text-sm font-medium text-[var(--muted)] bg-[var(--panel-muted)] px-3 py-1.5 rounded-lg border border-[var(--line)]">
@@ -206,17 +228,29 @@ export default function ConfigPage() {
 
               {interfacesError ? (
                 <div className="app-state-panel app-state-panel-error mt-5">
-                  <p className="app-section-label text-[var(--danger)]">Request Error</p>
+                  <p className="app-section-label text-[var(--danger)]">
+                    Request Error
+                  </p>
                   <p className="mt-2 text-sm font-semibold">网卡列表请求失败</p>
-                  <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm" style={{ fontFamily: "var(--font-mono)" }}>{String(interfacesError)}</pre>
+                  <pre
+                    className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm"
+                    style={{ fontFamily: "var(--font-mono)" }}
+                  >
+                    {String(interfacesError)}
+                  </pre>
                 </div>
               ) : interfacesLoading ? (
                 <div className="app-state-panel mt-5">
-                  <p className="mt-2 text-sm text-[var(--muted)]">正在加载网卡列表...</p>
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    正在加载网卡列表...
+                  </p>
                 </div>
               ) : (
                 <div className="mt-5">
-                  <label htmlFor="ip-select" className="app-section-label block">
+                  <label
+                    htmlFor="ip-select"
+                    className="app-section-label block"
+                  >
                     Available Interfaces
                   </label>
                   <div className="relative mt-2">
@@ -225,16 +259,22 @@ export default function ConfigPage() {
                       value={selectedIp}
                       onChange={(event) => setSelectedIp(event.target.value)}
                       disabled={!interfacesData?.interfaces.length}
-                      className="w-full appearance-none rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 pr-10 text-sm font-medium text-[var(--text)] shadow-sm transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] disabled:bg-gray-50 disabled:text-gray-400"
+                      className="w-full appearance-none rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 pr-10 text-sm font-medium text-[var(--text)] shadow-sm transition-all duration-200 ease-out focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] disabled:bg-gray-50 disabled:text-gray-400 hover:border-gray-300 cursor-pointer"
                     >
                       {interfacesData?.interfaces.map((item) => (
-                        <option key={`${item.name}-${item.ipv4}`} value={item.ipv4}>
-                          {item.ipv4} • {item.name}{item.is_loopback ? " (Loopback)" : ""}
+                        <option
+                          key={`${item.name}-${item.ipv4}`}
+                          value={item.ipv4}
+                        >
+                          {item.ipv4} • {item.name}
+                          {item.is_loopback ? " (Loopback)" : ""}
                         </option>
                       ))}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[var(--muted)]">
-                      <span className="material-symbols-outlined">expand_more</span>
+                      <span className="material-symbols-outlined">
+                        expand_more
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -244,20 +284,27 @@ export default function ConfigPage() {
             <section className="app-card overflow-hidden">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--line)] p-5">
                 <div>
-                  <h2 className="text-lg font-semibold text-[var(--text)]">2. 预览与复制</h2>
+                  <h2 className="text-lg font-semibold text-[var(--text)]">
+                    2. 预览与复制
+                  </h2>
                   <p className="mt-1 text-sm text-[var(--muted)]">
-                    {configData?.port ? `配置已更新为当前选择，端口：${configData.port}` : "配置结果将根据所选 IP 实时生成"}
+                    {configData?.port
+                      ? `配置已更新为当前选择，端口：${configData.port}`
+                      : "配置结果将根据所选 IP 实时生成"}
                   </p>
                 </div>
                 <button
                   type="button"
                   disabled={!markdownText || isCopiedAll}
                   onClick={() => void onCopyAll()}
-                  className={`app-btn-primary shrink-0 shadow-sm transition-colors ${
+                  className={`app-btn-primary shrink-0 transition-all duration-200 ease-out active:scale-[0.98] ${
                     isCopiedAll ? "!bg-[var(--success)] !text-white" : ""
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                  <span
+                    className="material-symbols-outlined text-[18px]"
+                    aria-hidden
+                  >
                     {isCopiedAll ? "check" : "copy_all"}
                   </span>
                   <span>{isCopiedAll ? "已复制！" : "一键复制全部"}</span>
@@ -268,19 +315,32 @@ export default function ConfigPage() {
                 {configLoading ? (
                   <div className="app-state-panel">
                     <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-[var(--muted)] spin">progress_activity</span>
-                      <p className="text-sm text-[var(--muted)]">正在生成配置...</p>
+                      <span className="material-symbols-outlined text-[var(--muted)] spin">
+                        progress_activity
+                      </span>
+                      <p className="text-sm text-[var(--muted)]">
+                        正在生成配置...
+                      </p>
                     </div>
                   </div>
                 ) : configError ? (
                   <div className="app-state-panel app-state-panel-error">
-                    <p className="app-section-label text-[var(--danger)]">Generation Failed</p>
+                    <p className="app-section-label text-[var(--danger)]">
+                      Generation Failed
+                    </p>
                     <p className="mt-2 text-sm font-semibold">配置生成失败</p>
-                    <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm" style={{ fontFamily: "var(--font-mono)" }}>{String(configError)}</pre>
+                    <pre
+                      className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm"
+                      style={{ fontFamily: "var(--font-mono)" }}
+                    >
+                      {String(configError)}
+                    </pre>
                   </div>
                 ) : !markdownText ? (
                   <div className="app-state-panel app-state-panel-empty flex flex-col items-center justify-center py-10 text-center">
-                    <span className="material-symbols-outlined text-4xl text-[var(--line-strong)] mb-3">integration_instructions</span>
+                    <span className="material-symbols-outlined text-4xl text-[var(--line-strong)] mb-3">
+                      integration_instructions
+                    </span>
                     <p className="app-section-label">No Configuration Yet</p>
                     <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted)]">
                       请在上方选择一个 IPv4 地址以生成配置内容。
@@ -297,17 +357,33 @@ export default function ConfigPage() {
                           </h3>
                         ),
                         h2: ({ children }) => (
-                          <h4 className="text-[15px] font-semibold tracking-tight text-[var(--text)] mt-4 mb-2">{children}</h4>
+                          <h4 className="text-[15px] font-semibold tracking-tight text-[var(--text)] mt-4 mb-2">
+                            {children}
+                          </h4>
                         ),
                         h3: ({ children }) => (
-                          <h5 className="text-[14px] font-semibold tracking-tight text-[var(--text)]">{children}</h5>
+                          <h5 className="text-[14px] font-semibold tracking-tight text-[var(--text)]">
+                            {children}
+                          </h5>
                         ),
-                        p: ({ children }) => <p className="text-[14px] leading-7 text-[var(--text)] mb-3">{children}</p>,
+                        p: ({ children }) => (
+                          <p className="text-[14px] leading-7 text-[var(--text)] mb-3">
+                            {children}
+                          </p>
+                        ),
                         code: ({ children, className, ...props }) => {
                           const match = /language-(\w+)/.exec(className || "");
                           const isInline = !className;
                           if (isInline) {
-                            return <code className="app-inline-code" style={{ fontFamily: "var(--font-mono)" }} {...props}>{children}</code>;
+                            return (
+                              <code
+                                className="app-inline-code"
+                                style={{ fontFamily: "var(--font-mono)" }}
+                                {...props}
+                              >
+                                {children}
+                              </code>
+                            );
                           }
                           const codeText = String(children).replace(/\n$/, "");
                           const language = match ? match[1] : "text";
@@ -317,7 +393,9 @@ export default function ConfigPage() {
                               <div className="absolute right-3 top-3 z-10 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                                 <CodeBlockCopyButton
                                   text={codeText}
-                                  onCopy={() => showToast("success", "代码段已复制")}
+                                  onCopy={() =>
+                                    showToast("success", "代码段已复制")
+                                  }
                                 />
                               </div>
                               <SyntaxHighlighter
@@ -329,9 +407,12 @@ export default function ConfigPage() {
                                   background: "transparent",
                                   fontSize: "13px",
                                   lineHeight: "1.6",
-                                  fontFamily: "var(--font-mono)"
+                                  fontFamily: "var(--font-mono)",
                                 }}
-                                codeTagProps={{ className: "font-mono", style: { fontFamily: "var(--font-mono)" } }}
+                                codeTagProps={{
+                                  className: "font-mono",
+                                  style: { fontFamily: "var(--font-mono)" },
+                                }}
                               >
                                 {codeText}
                               </SyntaxHighlighter>
@@ -346,16 +427,28 @@ export default function ConfigPage() {
                                 <div className="w-2.5 h-2.5 rounded-full bg-slate-600"></div>
                                 <div className="w-2.5 h-2.5 rounded-full bg-slate-600"></div>
                               </div>
-                              <div className="ml-4 text-[11px] font-medium text-slate-400 uppercase tracking-wider">Code</div>
+                              <div className="ml-4 text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+                                Code
+                              </div>
                             </div>
                             <div className="p-4 overflow-x-auto">
                               {children}
                             </div>
                           </div>
                         ),
-                        ul: ({ children }) => <ul className="list-disc space-y-1.5 pl-5 text-[14px] text-[var(--text)] mb-4 marker:text-[var(--muted)]">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal space-y-1.5 pl-5 text-[14px] text-[var(--text)] mb-4 marker:text-[var(--muted)]">{children}</ol>,
-                        li: ({ children }) => <li className="leading-7">{children}</li>
+                        ul: ({ children }) => (
+                          <ul className="list-disc space-y-1.5 pl-5 text-[14px] text-[var(--text)] mb-4 marker:text-[var(--muted)]">
+                            {children}
+                          </ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal space-y-1.5 pl-5 text-[14px] text-[var(--text)] mb-4 marker:text-[var(--muted)]">
+                            {children}
+                          </ol>
+                        ),
+                        li: ({ children }) => (
+                          <li className="leading-7">{children}</li>
+                        ),
                       }}
                     >
                       {markdownText}
@@ -369,25 +462,33 @@ export default function ConfigPage() {
           <aside className="space-y-6">
             <div className="app-card sticky top-6 p-5">
               <div className="flex items-center gap-2 border-b border-[var(--line)] pb-3 mb-4">
-                <span className="material-symbols-outlined text-[var(--primary)] text-[20px]">lightbulb</span>
-                <h3 className="text-base font-semibold text-[var(--text)]">说明与提示</h3>
+                <span className="material-symbols-outlined text-[var(--primary)] text-[20px]">
+                  lightbulb
+                </span>
+                <h3 className="text-base font-semibold text-[var(--text)]">
+                  说明与提示
+                </h3>
               </div>
 
               <div className="space-y-5 text-sm text-[var(--muted)]">
                 <div>
                   <p className="app-section-label mb-2">使用场景</p>
                   <div className="bg-[var(--primary-soft)] rounded-lg p-3 text-[13px] leading-6 text-[var(--primary-strong)] border border-[var(--primary)]/10">
-                    生成的配置可以直接用于配置 Claude Code 或作为独立脚本执行，从而与后端的 IDA 实例进行通信。
+                    生成的配置可以直接用于配置 Claude Code
+                    或作为独立脚本执行，从而与后端的 IDA 实例进行通信。
                   </div>
                 </div>
 
                 <div>
                   <p className="app-section-label flex items-center gap-1.5 text-[var(--danger)] mb-2">
-                    <span className="material-symbols-outlined text-[14px]">warning</span>
+                    <span className="material-symbols-outlined text-[14px]">
+                      warning
+                    </span>
                     网络可达性
                   </p>
                   <p className="leading-6 text-[13px] bg-[var(--danger-soft)] p-3 rounded-lg border border-[var(--danger)]/20 text-[var(--danger)]">
-                    如果前端单独运行（例如跨域或代理模式），请确保生成的配置中包含的 Hub 地址（即左侧选择的 IP）与目标环境网络相通。
+                    如果前端单独运行（例如跨域或代理模式），请确保生成的配置中包含的
+                    Hub 地址（即左侧选择的 IP）与目标环境网络相通。
                   </p>
                 </div>
 
@@ -395,12 +496,18 @@ export default function ConfigPage() {
                   <p className="app-section-label mb-2">快速操作</p>
                   <ul className="space-y-2 text-[13px] leading-6">
                     <li className="flex gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-[var(--success)] mt-0.5">check_circle</span>
+                      <span className="material-symbols-outlined text-[16px] text-[var(--success)] mt-0.5">
+                        check_circle
+                      </span>
                       <span>悬浮代码块右上角可单独复制某段代码。</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-[var(--success)] mt-0.5">check_circle</span>
-                      <span>点击&quot;一键复制全部&quot;可获取完整配置流。</span>
+                      <span className="material-symbols-outlined text-[16px] text-[var(--success)] mt-0.5">
+                        check_circle
+                      </span>
+                      <span>
+                        点击&quot;一键复制全部&quot;可获取完整配置流。
+                      </span>
                     </li>
                   </ul>
                 </div>

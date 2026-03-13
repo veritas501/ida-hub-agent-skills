@@ -20,7 +20,9 @@
   --danger-soft: #fff1f3;
   --code-bg: #111827;
   --focus-ring: rgba(43, 108, 238, 0.22);
-  --font-mono: "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", Menlo, Monaco, Consolas, monospace;
+  --font-mono:
+    "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", "Ubuntu Mono", Menlo,
+    Monaco, Consolas, monospace;
 }
 
 * {
@@ -32,7 +34,8 @@ body {
   min-height: 100%;
   margin: 0;
   padding: 0;
-  font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei",
+  font-family:
+    "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei",
     "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
@@ -99,10 +102,18 @@ textarea {
     font-size: 0.875rem;
     font-weight: 600;
     color: #ffffff;
+    transition: all 200ms ease-out;
   }
 
   .app-btn-primary:hover:not(:disabled) {
     background: var(--primary-strong);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  .app-btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   .app-btn-secondary {
@@ -118,11 +129,19 @@ textarea {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text);
+    transition: all 200ms ease-out;
   }
 
   .app-btn-secondary:hover:not(:disabled) {
     border-color: var(--line-strong);
     background: #eef2f8;
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.05),
+      0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  }
+
+  .app-btn-secondary:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   .app-btn-primary:disabled,
@@ -183,11 +202,15 @@ textarea {
 }
 
 .fade-in {
-  animation: fadeIn 0.24s ease both;
+  animation: fadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .material-symbols-outlined {
-  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 24;
   line-height: 1;
 }
 
@@ -204,7 +227,7 @@ textarea {
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(12px);
   }
 
   to {

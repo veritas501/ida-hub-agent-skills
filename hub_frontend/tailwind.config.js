@@ -14,6 +14,20 @@ module.exports = {
           700: "#0066d6",
           900: "#0b2440"
         }
+      },
+      keyframes: {
+        slideUpAndFade: {
+          '0%': { opacity: 0, transform: 'translateY(12px)' },
+          '100%': { opacity: 1, transform: 'translateY(0)' },
+        },
+        slideUpToast: {
+          '0%': { opacity: 0, transform: 'translateY(24px) translateX(-50%) scale(0.95)' },
+          '100%': { opacity: 1, transform: 'translateY(0) translateX(-50%) scale(1)' },
+        }
+      },
+      animation: {
+        'slide-up': 'slideUpAndFade 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'toast': 'slideUpToast 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
       }
     }
   },

@@ -3,11 +3,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "IDA Hub Frontend",
-  description: "Dashboard for IDA Hub Server"
+  description: "Dashboard for IDA Hub Server",
 };
 
 export default function RootLayout({
-  children
+  children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {

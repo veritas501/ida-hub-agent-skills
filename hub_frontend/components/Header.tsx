@@ -11,8 +11,8 @@ interface HeaderProps {
 
 function navClass(active: boolean): string {
   return active
-    ? "flex min-w-[100px] items-center justify-center gap-2 rounded-lg bg-[#2b6cee] px-4 py-2 text-[13px] font-semibold text-white shadow-sm"
-    : "flex min-w-[100px] items-center justify-center gap-2 rounded-lg bg-[#e9edf4] px-4 py-2 text-[13px] font-semibold text-[#2a3445] hover:bg-[#dde4ef]";
+    ? "flex min-w-[100px] items-center justify-center gap-2 rounded-lg bg-[#2b6cee] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition-all duration-200 ease-out active:scale-[0.98] hover:bg-[#1f5dd8]"
+    : "flex min-w-[100px] items-center justify-center gap-2 rounded-lg bg-[#e9edf4] px-4 py-2 text-[13px] font-semibold text-[#2a3445] transition-all duration-200 ease-out hover:bg-[#dde4ef] active:scale-[0.98]";
 }
 
 export function Header({ title, onRefresh, refreshing = false }: HeaderProps) {
@@ -27,28 +27,39 @@ export function Header({ title, onRefresh, refreshing = false }: HeaderProps) {
               terminal
             </span>
           </span>
-          <h1 className="text-base font-semibold tracking-tight text-[#202a3b] md:text-[20px]">{title}</h1>
+          <h1 className="text-base font-semibold tracking-tight text-[#202a3b] md:text-[20px]">
+            {title}
+          </h1>
         </div>
         <div className="flex items-center gap-2">
-          {onRefresh ? (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={refreshing}
-              className="flex min-w-[100px] items-center justify-center gap-2 rounded-lg bg-[#e9edf4] px-4 py-2 text-[13px] font-semibold text-[#2a3445] hover:bg-[#dde4ef] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                refresh
-              </span>
-              <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
-            </button>
-          ) : null}
+          <Link href="/" className={navClass(pathname === "/")}>
+            <span className="material-symbols-outlined text-[18px]" aria-hidden>
+              dashboard
+            </span>
+            <span>Dashboard</span>
+          </Link>
           <Link href="/config" className={navClass(pathname === "/config")}>
             <span className="material-symbols-outlined text-[18px]" aria-hidden>
               settings
             </span>
             <span>Config</span>
           </Link>
+          {onRefresh ? (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="flex min-w-[100px] items-center justify-center gap-2 rounded-lg bg-[#e9edf4] px-4 py-2 text-[13px] font-semibold text-[#2a3445] transition-all duration-200 ease-out hover:bg-[#dde4ef] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
+            >
+              <span
+                className="material-symbols-outlined text-[18px]"
+                aria-hidden
+              >
+                refresh
+              </span>
+              <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+            </button>
+          ) : null}
         </div>
       </div>
     </header>
