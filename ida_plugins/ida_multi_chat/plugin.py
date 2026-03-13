@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from dataclasses import dataclass
 
 import idaapi  # type: ignore
@@ -260,11 +261,12 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
     @staticmethod
     def _log(message: str) -> None:
         prefix = "[IDA Multi Chat] "
+        timestamp = datetime.now().strftime("%m-%d %H:%M:%S")
         text = message
         if text.startswith(prefix):
             text = text[len(prefix) :]
 
         if hasattr(ida_kernwin, "msg"):
-            ida_kernwin.msg(f"{prefix}{text}\n")
+            ida_kernwin.msg(f"{prefix}[{timestamp}] {text}\n")
         else:
-            print(f"{prefix}{text}")
+            print(f"{prefix}[{timestamp}] {text}")
