@@ -1,6 +1,6 @@
 [project]
 name = "ida-chat-hub"
-version = "0.2.0"
+version = "0.3.0"
 description = "IDA Chat Hub backend service"
 readme = "README.md"
 requires-python = ">=3.11"
