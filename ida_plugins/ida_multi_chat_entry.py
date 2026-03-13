@@ -1,8 +1,15 @@
-"""IDA plugin entry module.
+"""IDA Multi Chat plugin entry.
 
-Place this file and the sibling ``ida_multi_chat`` package into the IDA
-``plugins`` directory. This module intentionally stays minimal and only
-creates the plugin instance from the package implementation.
+Copy this file and the ``ida_multi_chat`` folder into IDA's ``plugins``
+directory, then restart IDA.
+
+After loading, you can use:
+- Edit -> IDA Multi Chat -> Connect
+- Edit -> IDA Multi Chat -> Disconnect
+- Edit -> IDA Multi Chat -> Settings
+
+The plugin connects IDA to a Hub Server and allows remote Python execution
+in the current IDA database context.
 """
 
 from ida_multi_chat.plugin import IDAMultiChatPlugin

@@ -1,3 +1,5 @@
+"""WebSocket client that bridges IDA instance and Hub server."""
+
 from __future__ import annotations
 
 import json
@@ -22,6 +24,8 @@ logging.getLogger("websocket").setLevel(logging.CRITICAL)
 
 @dataclass(frozen=True)
 class HubConfig:
+    """Connection settings for Hub server."""
+
     host: str = "127.0.0.1"
     port: int = 10086
     reconnect_interval: float = 5.0
@@ -32,6 +36,8 @@ StatusCallback = Callable[[str, str], None]
 
 
 class IDAHubClient:
+    """Manage Hub connection, registration, and remote execution flow."""
+
     STATE_DISCONNECTED = "disconnected"
     STATE_CONNECTING = "connecting"
     STATE_CONNECTED = "connected"
@@ -42,6 +48,8 @@ class IDAHubClient:
         script_executor: ScriptExecutor | None = None,
         status_callback: StatusCallback | None = None,
     ) -> None:
+        """Initialize client state and threading primitives."""
+
         self._config = config
         self._script_executor = script_executor
         self._status_callback = status_callback
@@ -60,24 +68,39 @@ class IDAHubClient:
 
     @property
     def instance_id(self) -> str:
+        """Return current instance identifier."""
+
         return self._instance_id
 
     @property
     def state(self) -> str:
+        """Return current connection state."""
+
         with self._lock:
             return self._state
 
     def is_connected(self) -> bool:
+        """Return True when websocket is registered and connected."""
+
         return self.state == self.STATE_CONNECTED
 
     def is_connecting(self) -> bool:
+        """Return True while initial connection/registration is ongoing."""
+
         return self.state == self.STATE_CONNECTING
 
     def update_config(self, config: HubConfig) -> None:
+        """Update runtime config for subsequent reconnect attempts."""
+
         with self._lock:
             self._config = config
 
     def connect(self, retry_on_initial_failure: bool = True) -> bool:
+        """Start background websocket loop.
+
+        Returns False when already connecting/connected.
+        """
+
         with self._lock:
             if self._state in {self.STATE_CONNECTING, self.STATE_CONNECTED}:
                 return False
@@ -100,6 +123,8 @@ class IDAHubClient:
             return True
 
     def disconnect(self) -> bool:
+        """Stop client loop and close websocket connection."""
+
         with self._lock:
             if self._state == self.STATE_DISCONNECTED and self._thread is None:
                 return False
@@ -130,6 +155,8 @@ class IDAHubClient:
         return True
 
     def _run_forever(self) -> None:
+        """Run websocket loop with reconnect policy."""
+
         while not self._stop_event.is_set():
             self._registered_event.clear()
             self._cancel_register_timer()
@@ -184,9 +211,13 @@ class IDAHubClient:
                 )
 
     def _build_ws_url(self) -> str:
+        """Build websocket URL from current config."""
+
         return f"ws://{self._config.host}:{self._config.port}/ws"
 
     def _generate_instance_id(self) -> str:
+        """Generate a stable-readable instance ID with random suffix."""
+
         filename = self._first_non_empty(
             self._call_ida(lambda: idaapi.get_root_filename()),
             self._call_ida(lambda: idc.get_root_filename()),
@@ -201,6 +232,8 @@ class IDAHubClient:
         return f"{base}_{suffix}"
 
     def _on_open(self, ws_app: Any) -> None:
+        """Send register message immediately after websocket opens."""
+
         self._last_error = ""
         payload = {
             "type": "register",
@@ -211,6 +244,8 @@ class IDAHubClient:
         self._start_register_timer(ws_app)
 
     def _on_message(self, _ws_app: Any, message: str) -> None:
+        """Handle register ack and execute messages from Hub."""
+
         try:
             payload = json.loads(message)
         except ValueError:
@@ -241,12 +276,16 @@ class IDAHubClient:
             return
 
     def _on_error(self, _ws_app: Any, error: Any) -> None:
+        """Capture websocket errors for status reporting/retry logs."""
+
         text = str(error)
         if "opcode=8" in text and "Register timeout" in text:
             return
         self._last_error = f"WebSocket error: {text}"
 
     def _on_close(self, _ws_app: Any, status_code: Any, message: Any) -> None:
+        """Record close reason unless disconnect was requested manually."""
+
         if self._manual_disconnect:
             return
 
@@ -257,6 +296,8 @@ class IDAHubClient:
             self._last_error = f"WebSocket closed{suffix}"
 
     def _handle_execute(self, payload: dict[str, Any]) -> None:
+        """Execute requested code and send execute_result back to Hub."""
+
         request_id = str(payload.get("request_id") or "")
         code = payload.get("code")
         if not request_id or not isinstance(code, str):
@@ -278,6 +319,8 @@ class IDAHubClient:
             self._set_state(self.STATE_DISCONNECTED, self._last_error)
 
     def _execute_code(self, code: str) -> ExecutionResult:
+        """Delegate code execution to injected executor."""
+
         if self._script_executor is None:
             return ExecutionResult(
                 success=False, error="Script executor is not configured."
@@ -289,6 +332,8 @@ class IDAHubClient:
             return ExecutionResult(success=False, error=traceback.format_exc())
 
     def _send_json(self, payload: dict[str, Any], ws_app: Any | None = None) -> None:
+        """Serialize and send JSON payload through active websocket."""
+
         message = json.dumps(payload, ensure_ascii=True)
         target = ws_app
         if target is None:
@@ -300,6 +345,8 @@ class IDAHubClient:
         target.send(message)
 
     def _get_instance_info(self) -> dict[str, str]:
+        """Collect instance metadata for register message."""
+
         info = self._run_in_main_thread(self._collect_instance_info_main_thread)
         if isinstance(info, dict):
             return info
@@ -312,6 +359,8 @@ class IDAHubClient:
         }
 
     def _collect_instance_info_main_thread(self) -> dict[str, str]:
+        """Collect IDA metadata in main thread to avoid API thread issues."""
+
         module = self._first_non_empty(
             self._call_ida(lambda: idaapi.get_root_filename()),
             self._call_ida(lambda: idc.get_root_filename()),
@@ -335,6 +384,8 @@ class IDAHubClient:
 
     @staticmethod
     def _run_in_main_thread(callback: Callable[[], Any]) -> Any:
+        """Run callback in IDA main thread when execute_sync is available."""
+
         execute_sync = getattr(ida_kernwin, "execute_sync", None)
         if not callable(execute_sync):
             return callback()
@@ -353,6 +404,8 @@ class IDAHubClient:
 
     @staticmethod
     def _first_non_empty(*values: Any) -> str:
+        """Return first non-empty value converted to stripped string."""
+
         for value in values:
             if value is None:
                 continue
@@ -363,6 +416,8 @@ class IDAHubClient:
 
     @staticmethod
     def _call_ida(callback: Callable[[], Any]) -> Any:
+        """Call an IDA API callback and suppress exceptions."""
+
         try:
             return callback()
         except Exception:
@@ -370,6 +425,8 @@ class IDAHubClient:
 
     @staticmethod
     def _get_idb_path() -> str:
+        """Read current IDB path with API compatibility fallback."""
+
         if hasattr(idc, "get_idb_path"):
             return str(idc.get_idb_path())
         if hasattr(idaapi, "get_path") and hasattr(idaapi, "PATH_TYPE_IDB"):
@@ -378,6 +435,8 @@ class IDAHubClient:
 
     @staticmethod
     def _get_architecture() -> str:
+        """Best-effort architecture string from IDA inf structure."""
+
         if not hasattr(idaapi, "get_inf_structure"):
             return ""
 
@@ -390,9 +449,12 @@ class IDAHubClient:
         return procname
 
     def _start_register_timer(self, ws_app: Any) -> None:
+        """Start timeout guard for register_ack."""
+
         def on_timeout() -> None:
             if self._registered_event.is_set() or self._stop_event.is_set():
                 return
+            # 注册超时后主动关闭连接，交由外层重连策略处理.
             self._last_error = "Registration timed out, reconnecting."
             try:
                 ws_app.close()
@@ -406,20 +468,31 @@ class IDAHubClient:
             self._register_timer.start()
 
     def _cancel_register_timer(self) -> None:
+        """Cancel register timeout timer safely."""
+
         with self._lock:
             self._cancel_register_timer_locked()
 
     def _cancel_register_timer_locked(self) -> None:
+        """Cancel register timer under lock."""
+
         if self._register_timer is None:
             return
         self._register_timer.cancel()
         self._register_timer = None
 
     def _set_state(self, state: str, message: str) -> None:
+        """Set state with lock protection."""
+
         with self._lock:
             self._set_state_locked(state, message)
 
     def _set_state_locked(self, state: str, message: str) -> None:
+        """Set state and notify status callback.
+
+        Caller must hold ``self._lock``.
+        """
+
         self._state = state
         if self._status_callback is not None:
             self._status_callback(state, message)

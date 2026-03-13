@@ -1,3 +1,5 @@
+"""IDA plugin UI layer for IDA Multi Chat."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -12,6 +14,8 @@ from .hub_client import HubConfig, IDAHubClient
 
 
 class HubSettingsForm(ida_kernwin.Form):  # type: ignore[misc]
+    """Settings dialog for Hub connection options."""
+
     def __init__(self, config: HubConfig) -> None:
         self._initial_config = config
         super().__init__(
@@ -39,6 +43,8 @@ Advanced Settings
         )
 
     def prompt(self) -> HubConfig | None:
+        """Show dialog and return updated config, or None if canceled."""
+
         self.Compile()
         self.host.value = self._initial_config.host
         self.port.value = str(self._initial_config.port)
@@ -66,6 +72,8 @@ Advanced Settings
 
 @dataclass(frozen=True)
 class PluginAction:
+    """Static metadata for one IDA menu action."""
+
     name: str
     label: str
     tooltip: str
@@ -73,20 +81,28 @@ class PluginAction:
 
 
 class MenuActionHandler(idaapi.action_handler_t):
+    """Bridge IDA action callbacks to plugin methods."""
+
     def __init__(self, plugin: "IDAMultiChatPlugin", action_name: str) -> None:
         super().__init__()
         self._plugin = plugin
         self._action_name = action_name
 
     def activate(self, _ctx) -> int:
+        """Handle menu activation."""
+
         self._plugin.handle_action(self._action_name)
         return 1
 
     def update(self, _ctx) -> int:
+        """Return current action enable/disable state."""
+
         return self._plugin.get_action_state(self._action_name)
 
 
 class IDAMultiChatPlugin(idaapi.plugin_t):
+    """Main IDA plugin implementation."""
+
     flags = idaapi.PLUGIN_KEEP | getattr(idaapi, "PLUGIN_HIDE", 0)
     comment = "IDA Multi Chat Hub plugin"
     help = "Connect to a Hub Server and execute remote scripts"
@@ -115,6 +131,8 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
     )
 
     def __init__(self) -> None:
+        """Initialize persistent config and runtime holders."""
+
         super().__init__()
         self._config_store = HubConfigPersistence()
         self._config = HubConfig()
@@ -123,6 +141,8 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
         self._registered_actions = False
 
     def init(self) -> int:
+        """IDA lifecycle hook: initialize plugin and optional auto-connect."""
+
         self._config = self._config_store.load()
         self._client = IDAHubClient(
             config=self._config,
@@ -138,14 +158,20 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
         return idaapi.PLUGIN_KEEP
 
     def run(self, _arg: int) -> None:
+        """IDA lifecycle hook for hotkey entry (unused)."""
+
         return
 
     def term(self) -> None:
+        """IDA lifecycle hook: disconnect and unregister actions."""
+
         if self._client is not None:
             self._client.disconnect()
         self._unregister_actions()
 
     def handle_action(self, action_name: str) -> None:
+        """Dispatch menu action to corresponding operation."""
+
         if action_name == "ida_multi_chat:connect":
             self.connect_to_hub()
             return
@@ -156,6 +182,8 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
             self.open_settings()
 
     def get_action_state(self, action_name: str) -> int:
+        """Compute whether a menu action should be enabled."""
+
         client = self._client
         if client is None:
             return idaapi.AST_DISABLE_ALWAYS
@@ -172,6 +200,8 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
         return idaapi.AST_ENABLE_ALWAYS if enabled else idaapi.AST_DISABLE_ALWAYS
 
     def connect_to_hub(self, retry_on_initial_failure: bool = True) -> None:
+        """Request Hub client connection."""
+
         if self._client is None:
             return
 
@@ -184,12 +214,16 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
             return
 
     def disconnect_from_hub(self) -> None:
+        """Request Hub client disconnection."""
+
         if self._client is None:
             return
         if self._client.disconnect():
             self._log("Disconnect requested")
 
     def open_settings(self) -> None:
+        """Open settings dialog and persist user choices."""
+
         try:
             dialog = HubSettingsForm(self._config)
             new_config = dialog.prompt()
@@ -217,6 +251,8 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
         )
 
     def _register_actions(self) -> None:
+        """Register and attach plugin menu actions."""
+
         if self._registered_actions:
             return
 
@@ -238,6 +274,8 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
         self._registered_actions = True
 
     def _unregister_actions(self) -> None:
+        """Detach and unregister plugin menu actions."""
+
         if not self._registered_actions:
             return
 
@@ -255,17 +293,22 @@ class IDAMultiChatPlugin(idaapi.plugin_t):
         self._action_handlers.clear()
 
     def _on_client_status(self, _state: str, message: str) -> None:
+        """Forward client status to IDA output."""
+
         if message:
             self._log(message)
 
     @staticmethod
     def _log(message: str) -> None:
+        """Write plugin log message with consistent prefix and timestamp."""
+
         prefix = "[IDA Multi Chat] "
         timestamp = datetime.now().strftime("%m-%d %H:%M:%S")
         text = message
         if text.startswith(prefix):
             text = text[len(prefix) :]
 
+        # 优先写入 IDA Output 窗口，不可用时退回标准输出.
         if hasattr(ida_kernwin, "msg"):
             ida_kernwin.msg(f"{prefix}[{timestamp}] {text}\n")
         else:

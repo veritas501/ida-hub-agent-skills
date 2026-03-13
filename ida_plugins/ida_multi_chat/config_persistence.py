@@ -1,3 +1,5 @@
+"""Config persistence layer for IDA Multi Chat plugin."""
+
 import ast
 import json
 import os
@@ -7,15 +9,21 @@ from ida_multi_chat.hub_client import HubConfig
 
 
 class HubConfigPersistence:
+    """Load and save Hub client settings from JSON file."""
+
     def __init__(self, config_path: str | None = None) -> None:
         package_dir = os.path.dirname(os.path.abspath(__file__))
         self._config_path = config_path or os.path.join(package_dir, ".hub_config.json")
 
     @property
     def config_path(self) -> str:
+        """Return absolute config file path."""
+
         return self._config_path
 
     def load(self) -> HubConfig:
+        """Load config from disk with defensive parsing and sane defaults."""
+
         default = HubConfig()
         if not os.path.exists(self._config_path):
             return default
@@ -43,6 +51,8 @@ class HubConfigPersistence:
         )
 
     def save(self, config: HubConfig) -> None:
+        """Persist config to JSON file."""
+
         payload = {
             "host": config.host,
             "port": config.port,
@@ -54,6 +64,8 @@ class HubConfigPersistence:
 
     @staticmethod
     def _read_host(raw_value: Any, default: str) -> str:
+        """Parse host field with compatibility for malformed legacy values."""
+
         if isinstance(raw_value, dict):
             raw_value = raw_value.get("host")
 
@@ -71,6 +83,8 @@ class HubConfigPersistence:
 
     @staticmethod
     def _read_int(raw_value: Any, default: int) -> int:
+        """Parse int value; fallback to default on parse errors."""
+
         try:
             return int(raw_value)
         except (TypeError, ValueError):
@@ -78,6 +92,8 @@ class HubConfigPersistence:
 
     @staticmethod
     def _read_float(raw_value: Any, default: float) -> float:
+        """Parse float value; fallback to default on parse errors."""
+
         try:
             return float(raw_value)
         except (TypeError, ValueError):
@@ -85,6 +101,8 @@ class HubConfigPersistence:
 
     @staticmethod
     def _read_bool(raw_value: Any, default: bool) -> bool:
+        """Parse bool-like values from bool/int/float/string."""
+
         if isinstance(raw_value, bool):
             return raw_value
         if isinstance(raw_value, (int, float)):

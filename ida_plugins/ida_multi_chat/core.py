@@ -1,3 +1,5 @@
+"""Core execution utilities for running Hub-delivered scripts in IDA."""
+
 from __future__ import annotations
 
 import io
@@ -15,6 +17,8 @@ from ida_domain import Database  # type: ignore
 
 @dataclass
 class ExecutionResult:
+    """Execution outcome returned to Hub."""
+
     success: bool
     output: str = ""
     error: str | None = None
@@ -24,6 +28,11 @@ ScriptExecutor = Callable[[str], ExecutionResult]
 
 
 def create_ida_domain_db() -> Any:
+    """Create a best-effort ida-domain Database object.
+
+    Different ida-domain versions may expose different constructors.
+    """
+
     constructors: list[Callable[[], Any]] = []
     if callable(Database):
         constructors.append(Database)
@@ -42,6 +51,8 @@ def create_ida_domain_db() -> Any:
 
 
 def build_execution_context() -> dict[str, Any]:
+    """Build the globals/locals context used by user script execution."""
+
     return {
         "__builtins__": __builtins__,
         "db": create_ida_domain_db(),
@@ -53,7 +64,11 @@ def build_execution_context() -> dict[str, Any]:
 
 
 class IDAScriptExecutor:
+    """Execute Python code safely in IDA main thread."""
+
     def execute(self, code: str) -> ExecutionResult:
+        """Schedule script execution via ``ida_kernwin.execute_sync``."""
+
         holder: dict[str, ExecutionResult] = {}
 
         def run_script() -> int:
@@ -80,10 +95,13 @@ class IDAScriptExecutor:
         )
 
     def _run_in_main_thread(self, code: str) -> ExecutionResult:
+        """Run compiled code and capture stdout/traceback."""
+
         buffer = io.StringIO()
         context = build_execution_context()
 
         try:
+            # 在主线程捕获 print 输出，便于回传给 Hub.
             with redirect_stdout(buffer):
                 exec(compile(code, "<ida_hub>", "exec"), context, context)
         except Exception:
