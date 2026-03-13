@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import useSWR from "swr";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import useSWR from "swr";
 
 import { Header } from "@/components/Header";
 import { fetchConfig, fetchNetworkInterfaces } from "@/lib/api";
-import type { ConfigResponse } from "@/lib/types";
+import type { ConfigResponse, NetworkInterfacesResponse } from "@/lib/types";
 
 async function copyText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
@@ -18,6 +20,29 @@ type ToastState = {
   message: string;
 } | null;
 
+const TOAST_DURATION_MS = 2000;
+
+function CodeBlockCopyButton({ text, onCopy }: { text: string; onCopy: () => void }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        void copyText(text);
+        setCopied(true);
+        onCopy();
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-600/50 bg-slate-700/50 text-slate-300 transition-all hover:bg-slate-600 hover:text-white"
+      title="Copy code"
+      aria-label="Copy code"
+    >
+      <span className="material-symbols-outlined text-[14px]">
+        {copied ? "check" : "content_copy"}
+      </span>
+    </button>
+  );
+}
+
 export default function ConfigPage() {
   const {
     data: interfacesData,
@@ -25,7 +50,7 @@ export default function ConfigPage() {
     isLoading: interfacesLoading,
     mutate: mutateInterfaces,
     isValidating: interfacesValidating
-  } = useSWR("network/interfaces", fetchNetworkInterfaces);
+  } = useSWR<NetworkInterfacesResponse>("network/interfaces", fetchNetworkInterfaces);
 
   const [selectedIp, setSelectedIp] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
@@ -44,6 +69,8 @@ export default function ConfigPage() {
     mutate: mutateConfig,
     isValidating: configValidating
   } = useSWR<ConfigResponse>(selectedIp ? `config/${selectedIp}` : null, () => fetchConfig(selectedIp));
+
+  const [isCopiedAll, setIsCopiedAll] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -80,7 +107,7 @@ export default function ConfigPage() {
     toastTimerRef.current = setTimeout(() => {
       setToast(null);
       toastTimerRef.current = null;
-    }, 2000);
+    }, TOAST_DURATION_MS);
   }
 
   function onRefresh(): void {
@@ -96,121 +123,291 @@ export default function ConfigPage() {
     }
     try {
       await copyText(markdownText);
-      showToast("success", "复制成功");
+      setIsCopiedAll(true);
+      setTimeout(() => setIsCopiedAll(false), TOAST_DURATION_MS);
     } catch {
       showToast("error", "复制失败，请手动复制");
     }
   }
 
   const isRefreshing = interfacesValidating || configValidating;
+  const interfacesCount = interfacesData?.interfaces.length ?? 0;
 
   return (
-    <main className="min-h-screen bg-[#f6f6f8]">
+    <main className="min-h-screen bg-[var(--bg)]">
       <Header title="Claude Code Configuration" onRefresh={onRefresh} refreshing={isRefreshing} />
+
       {toast ? (
-        <div className="pointer-events-none fixed right-4 top-20 z-50">
+        <div className="pointer-events-none fixed bottom-8 left-1/2 z-50 max-w-xs -translate-x-1/2 fade-in">
           <div
+            role={toast.type === "error" ? "alert" : "status"}
+            aria-live={toast.type === "error" ? "assertive" : "polite"}
+            aria-atomic="true"
             className={
               toast.type === "success"
-                ? "rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg"
-                : "rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-lg"
+                ? "rounded-xl border border-emerald-200 bg-[var(--success-soft)] px-4 py-3 text-sm font-semibold text-[var(--success)] shadow-sm"
+                : "rounded-xl border border-rose-200 bg-[var(--danger-soft)] px-4 py-3 text-sm font-semibold text-[var(--danger)] shadow-sm"
             }
           >
-            {toast.message}
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">
+                {toast.type === "success" ? "check_circle" : "error"}
+              </span>
+              {toast.message}
+            </div>
           </div>
         </div>
       ) : null}
-      <section className="mx-auto w-full max-w-6xl space-y-4 px-4 py-7 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+
+      <section className="mx-auto w-full max-w-6xl space-y-6 px-4 py-7 sm:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm text-[#6e7890]">先选择 IPv4 网卡地址，再生成对应 Hub 配置命令。</p>
-            <Link href="/" className="mt-1 inline-block text-sm font-semibold text-[#2b6cee] hover:underline">
-              ← Back to Dashboard
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/" className="text-[var(--muted)] hover:text-[var(--text)] transition-colors" title="返回 Dashboard">
+                <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+              </Link>
+              <p className="app-section-label">Configuration</p>
+            </div>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text)] md:text-[30px]">
+              Generate Claude Code Setup
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              选择可用 IPv4 网卡，查看生成结果并复制，直接用于 Claude Code 或相关脚本。
+            </p>
           </div>
-          <button
-            type="button"
-            disabled={!markdownText}
-            onClick={() => void onCopyAll()}
-            className="rounded-lg bg-[#2b6cee] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Copy All
-          </button>
+
+          <div className="app-subcard flex flex-wrap items-center gap-4 px-4 py-3 lg:justify-end">
+            <div>
+              <p className="app-section-label">Interfaces</p>
+              <p className="mt-1 text-lg font-semibold text-[var(--text)]">{interfacesCount}</p>
+            </div>
+            <div className="hidden h-10 w-px bg-[var(--line)] sm:block" aria-hidden />
+            <div>
+              <p className="app-section-label">Selected IP</p>
+              <p className="mt-1 text-sm font-medium text-[var(--text)]">{selectedIp || "Waiting..."}</p>
+            </div>
+          </div>
         </div>
 
-        <section className="rounded-2xl border border-[#e4e8ef] bg-white p-4">
-          <label htmlFor="ip-select" className="mb-2 block text-sm font-semibold text-[#283248]">
-            IPv4 网卡
-          </label>
-          <select
-            id="ip-select"
-            value={selectedIp}
-            onChange={(event) => setSelectedIp(event.target.value)}
-            disabled={interfacesLoading || !interfacesData?.interfaces.length}
-            className="w-full rounded-lg border border-[#d7dfea] bg-white px-3 py-2 text-sm text-[#1e283a] outline-none focus:border-[#2b6cee]"
-          >
-            {interfacesData?.interfaces.map((item) => (
-              <option key={`${item.name}-${item.ipv4}`} value={item.ipv4}>
-                {item.ipv4} ({item.name}{item.is_loopback ? ", loopback" : ""})
-              </option>
-            ))}
-          </select>
-        </section>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="space-y-6">
+            <section className="app-card p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-[var(--text)]">1. 选择 IPv4 网卡</h2>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                    选择一个可被其他设备或本机插件访问的 IPv4 地址。默认会优先使用后端推荐的地址。
+                  </p>
+                </div>
+                <div className="text-sm font-medium text-[var(--muted)] bg-[var(--panel-muted)] px-3 py-1.5 rounded-lg border border-[var(--line)]">
+                  Hub 端口: <span className="text-[var(--text)]">10086</span>
+                </div>
+              </div>
 
-        {interfacesLoading ? (
-          <div className="rounded-2xl border border-[#e4e8ef] bg-white p-6 text-sm text-[#69758a]">
-            正在加载网卡列表...
+              {interfacesError ? (
+                <div className="app-state-panel app-state-panel-error mt-5">
+                  <p className="app-section-label text-[var(--danger)]">Request Error</p>
+                  <p className="mt-2 text-sm font-semibold">网卡列表请求失败</p>
+                  <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm" style={{ fontFamily: "var(--font-mono)" }}>{String(interfacesError)}</pre>
+                </div>
+              ) : interfacesLoading ? (
+                <div className="app-state-panel mt-5">
+                  <p className="mt-2 text-sm text-[var(--muted)]">正在加载网卡列表...</p>
+                </div>
+              ) : (
+                <div className="mt-5">
+                  <label htmlFor="ip-select" className="app-section-label block">
+                    Available Interfaces
+                  </label>
+                  <div className="relative mt-2">
+                    <select
+                      id="ip-select"
+                      value={selectedIp}
+                      onChange={(event) => setSelectedIp(event.target.value)}
+                      disabled={!interfacesData?.interfaces.length}
+                      className="w-full appearance-none rounded-xl border border-[var(--line-strong)] bg-white px-4 py-3 pr-10 text-sm font-medium text-[var(--text)] shadow-sm transition-colors focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] disabled:bg-gray-50 disabled:text-gray-400"
+                    >
+                      {interfacesData?.interfaces.map((item) => (
+                        <option key={`${item.name}-${item.ipv4}`} value={item.ipv4}>
+                          {item.ipv4} • {item.name}{item.is_loopback ? " (Loopback)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[var(--muted)]">
+                      <span className="material-symbols-outlined">expand_more</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <section className="app-card overflow-hidden">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--line)] p-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-[var(--text)]">2. 预览与复制</h2>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {configData?.port ? `配置已更新为当前选择，端口：${configData.port}` : "配置结果将根据所选 IP 实时生成"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!markdownText || isCopiedAll}
+                  onClick={() => void onCopyAll()}
+                  className={`app-btn-primary shrink-0 shadow-sm transition-colors ${
+                    isCopiedAll ? "!bg-[var(--success)] !text-white" : ""
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                    {isCopiedAll ? "check" : "copy_all"}
+                  </span>
+                  <span>{isCopiedAll ? "已复制！" : "一键复制全部"}</span>
+                </button>
+              </div>
+
+              <div className="p-5 bg-[#fafbfc]">
+                {configLoading ? (
+                  <div className="app-state-panel">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-[var(--muted)] spin">progress_activity</span>
+                      <p className="text-sm text-[var(--muted)]">正在生成配置...</p>
+                    </div>
+                  </div>
+                ) : configError ? (
+                  <div className="app-state-panel app-state-panel-error">
+                    <p className="app-section-label text-[var(--danger)]">Generation Failed</p>
+                    <p className="mt-2 text-sm font-semibold">配置生成失败</p>
+                    <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm" style={{ fontFamily: "var(--font-mono)" }}>{String(configError)}</pre>
+                  </div>
+                ) : !markdownText ? (
+                  <div className="app-state-panel app-state-panel-empty flex flex-col items-center justify-center py-10 text-center">
+                    <span className="material-symbols-outlined text-4xl text-[var(--line-strong)] mb-3">integration_instructions</span>
+                    <p className="app-section-label">No Configuration Yet</p>
+                    <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted)]">
+                      请在上方选择一个 IPv4 地址以生成配置内容。
+                    </p>
+                  </div>
+                ) : (
+                  <div className="markdown-body text-[14px] leading-7 text-[var(--text)]">
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => (
+                          <h3 className="text-[17px] font-semibold tracking-tight text-[var(--text)] flex items-center gap-2 mt-6 first:mt-0 mb-3">
+                            <span className="w-1 h-4 bg-[var(--primary)] rounded-full inline-block"></span>
+                            {children}
+                          </h3>
+                        ),
+                        h2: ({ children }) => (
+                          <h4 className="text-[15px] font-semibold tracking-tight text-[var(--text)] mt-4 mb-2">{children}</h4>
+                        ),
+                        h3: ({ children }) => (
+                          <h5 className="text-[14px] font-semibold tracking-tight text-[var(--text)]">{children}</h5>
+                        ),
+                        p: ({ children }) => <p className="text-[14px] leading-7 text-[var(--text)] mb-3">{children}</p>,
+                        code: ({ children, className, ...props }) => {
+                          const match = /language-(\w+)/.exec(className || "");
+                          const isInline = !className;
+                          if (isInline) {
+                            return <code className="app-inline-code" style={{ fontFamily: "var(--font-mono)" }} {...props}>{children}</code>;
+                          }
+                          const codeText = String(children).replace(/\n$/, "");
+                          const language = match ? match[1] : "text";
+
+                          return (
+                            <>
+                              <div className="absolute right-3 top-3 z-10 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                <CodeBlockCopyButton
+                                  text={codeText}
+                                  onCopy={() => showToast("success", "代码段已复制")}
+                                />
+                              </div>
+                              <SyntaxHighlighter
+                                language={language}
+                                style={vscDarkPlus}
+                                customStyle={{
+                                  margin: 0,
+                                  padding: 0,
+                                  background: "transparent",
+                                  fontSize: "13px",
+                                  lineHeight: "1.6",
+                                  fontFamily: "var(--font-mono)"
+                                }}
+                                codeTagProps={{ className: "font-mono", style: { fontFamily: "var(--font-mono)" } }}
+                              >
+                                {codeText}
+                              </SyntaxHighlighter>
+                            </>
+                          );
+                        },
+                        pre: ({ children }) => (
+                          <div className="relative group my-4 rounded-xl overflow-hidden border border-slate-800 shadow-sm bg-[var(--code-bg)]">
+                            <div className="flex items-center px-4 py-2 bg-slate-800 border-b border-slate-700/50">
+                              <div className="flex gap-1.5">
+                                <div className="w-2.5 h-2.5 rounded-full bg-slate-600"></div>
+                                <div className="w-2.5 h-2.5 rounded-full bg-slate-600"></div>
+                                <div className="w-2.5 h-2.5 rounded-full bg-slate-600"></div>
+                              </div>
+                              <div className="ml-4 text-[11px] font-medium text-slate-400 uppercase tracking-wider">Code</div>
+                            </div>
+                            <div className="p-4 overflow-x-auto">
+                              {children}
+                            </div>
+                          </div>
+                        ),
+                        ul: ({ children }) => <ul className="list-disc space-y-1.5 pl-5 text-[14px] text-[var(--text)] mb-4 marker:text-[var(--muted)]">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal space-y-1.5 pl-5 text-[14px] text-[var(--text)] mb-4 marker:text-[var(--muted)]">{children}</ol>,
+                        li: ({ children }) => <li className="leading-7">{children}</li>
+                      }}
+                    >
+                      {markdownText}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
-        ) : null}
 
-        {interfacesError ? (
-          <pre className="overflow-x-auto rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-            {String(interfacesError)}
-          </pre>
-        ) : null}
+          <aside className="space-y-6">
+            <div className="app-card sticky top-6 p-5">
+              <div className="flex items-center gap-2 border-b border-[var(--line)] pb-3 mb-4">
+                <span className="material-symbols-outlined text-[var(--primary)] text-[20px]">lightbulb</span>
+                <h3 className="text-base font-semibold text-[var(--text)]">说明与提示</h3>
+              </div>
 
-        {configLoading ? (
-          <div className="rounded-2xl border border-[#e4e8ef] bg-white p-6 text-sm text-[#69758a]">
-            正在加载配置...
-          </div>
-        ) : null}
+              <div className="space-y-5 text-sm text-[var(--muted)]">
+                <div>
+                  <p className="app-section-label mb-2">使用场景</p>
+                  <div className="bg-[var(--primary-soft)] rounded-lg p-3 text-[13px] leading-6 text-[var(--primary-strong)] border border-[var(--primary)]/10">
+                    生成的配置可以直接用于配置 Claude Code 或作为独立脚本执行，从而与后端的 IDA 实例进行通信。
+                  </div>
+                </div>
 
-        {configError ? (
-          <pre className="overflow-x-auto rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-            {String(configError)}
-          </pre>
-        ) : null}
+                <div>
+                  <p className="app-section-label flex items-center gap-1.5 text-[var(--danger)] mb-2">
+                    <span className="material-symbols-outlined text-[14px]">warning</span>
+                    网络可达性
+                  </p>
+                  <p className="leading-6 text-[13px] bg-[var(--danger-soft)] p-3 rounded-lg border border-[var(--danger)]/20 text-[var(--danger)]">
+                    如果前端单独运行（例如跨域或代理模式），请确保生成的配置中包含的 Hub 地址（即左侧选择的 IP）与目标环境网络相通。
+                  </p>
+                </div>
 
-        {markdownText ? (
-          <section className="rounded-2xl border border-[#e4e8ef] bg-white p-5">
-            <div className="markdown-body space-y-3 text-[14px] leading-6 text-[#1f2a3d]">
-              <ReactMarkdown
-                components={{
-                  h1: ({ children }) => <h3 className="text-[16px] font-semibold text-[#283248]">{children}</h3>,
-                  h2: ({ children }) => <h4 className="text-[15px] font-semibold text-[#283248]">{children}</h4>,
-                  p: ({ children }) => <p className="text-[14px] text-[#1f2a3d]">{children}</p>,
-                  code: ({ children, className }) => {
-                    const isInline = !className;
-                    if (isInline) {
-                      return <code className="rounded bg-[#eef2f8] px-1 py-0.5 text-[13px] text-[#1e315c]">{children}</code>;
-                    }
-                    return <code className="text-[13px] leading-6 text-slate-100">{children}</code>;
-                  },
-                  pre: ({ children }) => (
-                    <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-[#111827] p-3 text-[13px] leading-6 text-slate-100">
-                      {children}
-                    </pre>
-                  ),
-                  ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
-                  li: ({ children }) => <li className="text-[14px] text-[#1f2a3d]">{children}</li>
-                }}
-              >
-                {markdownText}
-              </ReactMarkdown>
+                <div>
+                  <p className="app-section-label mb-2">快速操作</p>
+                  <ul className="space-y-2 text-[13px] leading-6">
+                    <li className="flex gap-2">
+                      <span className="material-symbols-outlined text-[16px] text-[var(--success)] mt-0.5">check_circle</span>
+                      <span>悬浮代码块右上角可单独复制某段代码。</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="material-symbols-outlined text-[16px] text-[var(--success)] mt-0.5">check_circle</span>
+                      <span>点击&quot;一键复制全部&quot;可获取完整配置流。</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
-          </section>
-        ) : null}
+          </aside>
+        </div>
       </section>
     </main>
   );

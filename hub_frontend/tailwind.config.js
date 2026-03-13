@@ -3,6 +3,9 @@ module.exports = {
   content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        mono: ['"Cascadia Mono"', '"Segoe UI Mono"', '"Roboto Mono"', '"Ubuntu Mono"', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
       colors: {
         brand: {
           50: "#eef8ff",
