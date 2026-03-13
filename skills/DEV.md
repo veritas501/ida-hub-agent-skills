@@ -7,12 +7,21 @@
 It is responsible for:
 
 - documenting stable API-driven workflows
-- providing command templates and analysis patterns
+- providing task templates and analysis playbooks (not raw API fragments)
 - reducing prompt variance for repeatable execution
+- enforcing output budget conventions (summary-first, Top N, bounded print)
 
 Current main skill:
 
 - `skills/ida/`
+
+## Design principles
+
+- **Python helper first**: default path uses a local Python helper, not curl.
+- **Composite remote scripts**: default "one task, one script" — collect/filter/aggregate/summarize in IDA, return summary only.
+- **Output budget**: all templates cap output; avoid unbounded `for ...: print(...)`.
+- **Patchable iteration**: prefer patching local helper or script file over rewriting commands.
+- **curl as fallback**: only for quick connectivity checks or user-explicit requests.
 
 ## Integration points
 
@@ -38,7 +47,9 @@ When API/protocol changes:
 
 ## Quality checklist
 
-- examples are copy-paste runnable
-- required placeholders are explicit (`<INSTANCE_ID>`, `<CODE>`)
+- examples follow Collect → Filter → Aggregate → Summarize pipeline
+- output is always bounded (Top N, count, json.dumps)
+- required placeholders are explicit (`<INSTANCE_ID>`, target names)
 - error handling guidance includes 404/503/504 cases
 - security notes are present for network exposure scenarios
+- curl examples are clearly labeled as fallback/diagnostic
