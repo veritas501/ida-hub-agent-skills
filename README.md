@@ -1,4 +1,4 @@
-# ida-hub-agent-skills
+# IDA Hub Agent Skiils
 
 ![](assets/ida.png)
 
