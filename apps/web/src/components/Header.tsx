@@ -3,8 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { clearAuth, getUsername } from "@/lib/auth";
 import { useI18n } from "@/components/I18nProvider";
 import { Icon } from "@/components/ui/Icon";
-
-const VERSION = "0.1.0";
+import { VERSION } from "@/version";
 
 /** 导航项 — 激活态用底部橙色线条指示 */
 function navClass(active: boolean): string {
