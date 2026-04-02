@@ -5,11 +5,11 @@
 IDA Hub manages multiple IDA Pro instances centrally. Agents interact with IDA remotely via HTTP API for reverse engineering tasks.
 
 ```
-IDA Pro ①  ──WebSocket──╮
-IDA Pro ②  ──WebSocket──┼──▶  Hub  ◀──HTTP──  Agent
-IDA Pro ③  ──WebSocket──╯  ▲
-   ...                     │
-IDA Pro ⓝ  ──WebSocket─────╯
+IDA Pro (1) ──WebSocket──╮
+IDA Pro (2) ──WebSocket──┼──▶  Hub  ◀──HTTP──  Agent
+IDA Pro (3) ──WebSocket──╯  ▲
+   ...                      │
+IDA Pro (n) ──WebSocket─────╯
 ```
 
 ## Quick Start
@@ -25,7 +25,7 @@ bun run start
 Or build a standalone binary (zero dependencies, recommended for distribution):
 
 ```bash
-bun run bundle:bin  # → apps/api/dist/ida-hub
+bun run bundle:bin  # -> apps/api/dist/ida-hub
 ```
 
 ```bash
