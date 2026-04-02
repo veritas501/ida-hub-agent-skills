@@ -2,105 +2,135 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目愿景
+## Project Overview
 
-IDA Chat 分布式架构项目：多个 IDA Pro 实例通过 WebSocket 统一接入 Hub，外部 Agent/前端通过 HTTP API 与指定 IDA 实例交互。
+Distributed IDA Chat architecture: multiple IDA Pro instances connect to a central Hub via WebSocket; external Agents/frontends interact with specific IDA instances through HTTP API.
 
-## 常用命令
+## Common Commands
 
 ```bash
-# 安装依赖
+# Install dependencies
 bun install
 
-# 开发（API + 前端分别启动）
-bun run dev:api    # Hono 后端 http://0.0.0.0:10086
-bun run dev:web    # Vite 前端 http://localhost:5173（代理 /api、/ws → 10086）
+# Development (API + frontend separately)
+bun run dev:api    # Hono backend http://0.0.0.0:10086
+bun run dev:web    # Vite frontend http://localhost:5173 (proxies /api, /ws → 10086)
 
-# 直接运行源码（开发调试）
+# Run source directly (dev/debug)
 bun apps/api/src/server.ts --host 0.0.0.0 --port 10086 --debug
 
-# 构建（Turborepo 按依赖顺序: shared → api + web）
+# Build (Turborepo topological order: shared → api + web)
 bun run build
 
-# 独立二进制分发（零依赖）
-bun run bundle:bin   # 产物: apps/api/dist/ida-hub
+# Bundle for deployment
+bun run bundle       # build + minify JS + embed web assets into apps/api/web/
+bun run bundle:bin   # bundle + standalone binary: apps/api/dist/ida-hub
+bun run start        # run built artifact dist/server.js
+
+# Clean
+bun run clean        # remove all build artifacts
 ```
 
-**当前无测试框架和 lint 工具配置。** 类型安全依赖 TypeScript strict 模式。
+**No test framework or linter configured.** Turborepo `test`/`lint` tasks are defined but no-op. Type safety relies on TypeScript strict mode.
 
-## 架构总览
+## Architecture Overview
 
 ```
 IDA Plugin ──WebSocket(/ws)──▶ Hub API (apps/api) ◀──HTTP(/api/*)── Agent / Frontend (apps/web)
                                      │
-                              packages/shared（类型、验证、DB、配置、日志）
+                              packages/shared (types, validators, DB, config, logger)
 ```
 
-### Monorepo 结构
+### Monorepo Structure
 
-| 模块 | 语言 | 职责 | 入口 |
+| Package | Language | Role | Entry |
 |---|---|---|---|
-| `apps/api` | TypeScript (Bun) | Hono HTTP + WebSocket 服务 | `src/server.ts` → `src/app.ts` |
-| `apps/web` | TypeScript/React | Vite SPA 前端 | `src/main.tsx` |
-| `packages/shared` | TypeScript | 共享类型、Zod 验证、Drizzle ORM、CLI 配置、consola 日志 | `src/index.ts` |
-| `ida_plugins` | Python | IDA 插件：WebSocket 接入 + 脚本执行 | `ida_multi_chat_entry.py` |
-| `skills` | Markdown | Agent 技能文档（`npx skills add` 兼容） | `ida-hub/SKILL.md` |
+| `apps/api` | TypeScript (Bun) | Hono HTTP + WebSocket server | `src/server.ts` → `src/app.ts` |
+| `apps/web` | TypeScript/React | Vite SPA frontend | `src/main.tsx` |
+| `packages/shared` | TypeScript | Shared types, Zod validators, Drizzle ORM, CLI config, consola logger | `src/index.ts` |
+| `ida_plugins` | Python | IDA plugin: WebSocket connection + script execution | `ida_multi_chat_entry.py` |
+| `skills` | Markdown | Agent skill docs (`npx skills add` compatible) | `ida-hub/SKILL.md` |
 
-### 后端关键路径
+**Module-level CLAUDE.md files:** `ida_plugins/CLAUDE.md` (plugin architecture, data models, FAQ), `skills/CLAUDE.md` (skill installation & maintenance). Read these before modifying the corresponding module.
 
-- `server.ts`：Bun.serve() 启动 + 静态文件托管 + SPA fallback
-- `app.ts`：组装中间件/路由、初始化 DB/Registry/网络探测
-- `registry/index.ts`：IDA 实例注册、execute 请求派发与超时、用户隔离
-- `ws/handler.ts`：WebSocket 连接状态机（auth → register → execute_result），用 `WeakMap<WSContext, ConnState>` 管理
-- `middleware/auth.ts`：Bearer token 认证
+### Backend Key Paths
+
+- `server.ts`: Bun.serve() startup + static file hosting + SPA fallback
+- `app.ts`: middleware/route assembly, DB/Registry/network probe initialization
+- `registry/index.ts`: IDA instance registration, execute request dispatch with timeout, user isolation
+- `ws/handler.ts`: WebSocket connection state machine (auth → register → execute_result), managed via `WeakMap<WSContext, ConnState>`
+- `middleware/auth.ts`: Bearer token authentication
+
+### Frontend Key Paths
+
+- Routing: `react-router-dom` v7, 4 pages (`/login`, `/`, `/ida_config`, `/agent_config`), `AuthGuard` component protects non-login pages
+- Data fetching: SWR, Dashboard instance list polls every 5s (`refreshInterval: 5000`)
+- i18n: custom `I18nProvider` + `useI18n()` hook, zh/en, type-safe keys, locale stored in `localStorage` (`ida_hub_locale`)
+- Auth state: `localStorage` (`ida_hub_token`/`ida_hub_username`), auto-redirect to `/login` on API 401
+- API client: centralized in `lib/api.ts`, supports `VITE_HUB_URL` env var for remote Hub address
+- Styling: Tailwind CSS v3 + CSS variable design tokens (orange brand color, custom radius/animations/font stacks)
+
+### Database
+
+Single `users` table (SQLite, `bun:sqlite` + Drizzle ORM):
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT |
+| `username` | TEXT | NOT NULL UNIQUE |
+| `password_hash` | TEXT | NOT NULL |
+| `token` | TEXT | NOT NULL UNIQUE |
+| `created_at` | TEXT | NOT NULL DEFAULT `datetime('now')` |
+
+Schema: `packages/shared/src/db/schema.ts`. No Drizzle migration files — table created imperatively in `initDB()` via `sqlite.exec()`. PRAGMA: `journal_mode = WAL`.
 
 ### HTTP API
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 |---|---|---|
-| POST | `/api/auth/register` | 注册用户 |
-| POST | `/api/auth/login` | 登录获取 token |
-| GET | `/api/instances` | 列出当前用户的 IDA 实例 |
-| POST | `/api/execute` | 向指定实例执行代码 |
-| GET | `/api/network/interfaces` | 列出服务端网络接口 |
-| GET | `/api/agent_config` | 获取 Agent 配置 Markdown |
-| GET | `/api/ida_config` | 获取 IDA 插件配置字符串 |
-| GET | `/healthz` | 健康检查 |
+| POST | `/api/auth/register` | Register user |
+| POST | `/api/auth/login` | Login, returns token |
+| GET | `/api/instances` | List current user's IDA instances |
+| POST | `/api/execute` | Execute code on a specific instance |
+| GET | `/api/network/interfaces` | List server network interfaces |
+| GET | `/api/agent_config` | Get Agent config as Markdown |
+| GET | `/api/ida_config` | Get IDA plugin config string |
+| GET | `/healthz` | Health check |
 
-### WebSocket 协议
+### WebSocket Protocol
 
-连接: `ws://<host>:10086/ws?token=<token>`
+Connection: `ws://<host>:10086/ws?token=<token>`
 
-消息流: `register` → `register_ack` → (`execute` ↔ `execute_result`)
+Message flow: `register` → `register_ack` → (`execute` ↔ `execute_result`)
 
-关闭码: `4000` REPLACED / `4001` REGISTER_REQUIRED / `4002` REGISTER_TIMEOUT / `4003` AUTH_FAILED
+Close codes: `4000` REPLACED / `4001` REGISTER_REQUIRED / `4002` REGISTER_TIMEOUT / `4003` AUTH_FAILED
 
-## 配置设计
+## Configuration
 
-**不使用环境变量，所有配置通过 CLI 参数传入**（`node:util parseArgs` + Zod 验证）：
+**No environment variables — all config via CLI args** (`node:util parseArgs` + Zod validation):
 
-| 参数 | 默认值 | 说明 |
+| Flag | Default | Description |
 |---|---|---|
-| `--host` | `0.0.0.0` | 监听地址 |
-| `--port` | `10086` | 监听端口 |
-| `--timeout` | `30` | 执行超时秒数 |
-| `--db` | `~/.ida_hub/hub_users.db` | SQLite 数据库路径 |
-| `--debug` | `false` | 启用调试日志 |
+| `--host` | `0.0.0.0` | Listen address |
+| `--port` | `10086` | Listen port |
+| `--timeout` | `30` | Execute timeout in seconds |
+| `--db` | `~/.ida_hub/hub_users.db` | SQLite database path |
+| `--debug` | `false` | Enable debug logging |
 
-## 编码规范
+## Coding Conventions
 
-- TypeScript：严格模式、ESM、类型注解
-- `packages/shared` 用 `tsc` 构建，re-export **必须**使用 `.js` 后缀
-- `postcss.config` 和 `tailwind.config` **必须**使用 `.cjs` 扩展名（`"type": "module"`）
-- `bun:sqlite` 的 pragma 设置用 `sqlite.exec("PRAGMA ...")` 而非 `.pragma()`
-- Drizzle ORM 使用 `drizzle-orm/bun-sqlite` 驱动
-- 前端使用 `@/` 路径别名（Vite resolve.alias → `src/`）
-- React 组件职责单一，API 统一收口到 `lib/api.ts`
-- Python（插件）：类型注解、清晰模块边界
-- 代码注释语言与现有代码库保持一致（中文）
+- TypeScript: strict mode, ESM, type annotations
+- `packages/shared` built with `tsc`, re-exports **must** use `.js` extension
+- `postcss.config` and `tailwind.config` **must** use `.cjs` extension (`"type": "module"`)
+- `bun:sqlite` pragma via `sqlite.exec("PRAGMA ...")`, not `.pragma()`
+- Drizzle ORM uses `drizzle-orm/bun-sqlite` driver
+- Frontend uses `@/` path alias (Vite resolve.alias → `src/`)
+- React components: single responsibility, API calls centralized in `lib/api.ts`
+- Python (plugin): type annotations, clear module boundaries
+- Code comments: keep consistent with existing codebase language (Chinese)
 
-## AI 使用指引
+## AI Usage Guide
 
-- 先读后改，优先定位模块级 `CLAUDE.md` 再进入源码
-- 涉及接口联调时，按链路顺序排查：Frontend → Hub API → WS → Plugin
-- 对大输出任务优先摘要化，避免在 IDA 端回传全集（输出预算 200k 字符）
+- Read before modifying — check module-level `CLAUDE.md` before diving into source
+- For cross-component debugging, trace the full chain: Frontend → Hub API → WS → Plugin
+- For large output tasks, prefer summaries — avoid returning full datasets from IDA (output budget 200k chars)

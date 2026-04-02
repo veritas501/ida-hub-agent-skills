@@ -5,7 +5,11 @@
 IDA Hub manages multiple IDA Pro instances centrally. Agents interact with IDA remotely via HTTP API for reverse engineering tasks.
 
 ```
-IDA Plugin --WebSocket--> Hub <--HTTP--> Agent / Web UI
+IDA Pro ①  ──WebSocket──╮
+IDA Pro ②  ──WebSocket──┼──▶  Hub  ◀──HTTP──  Agent
+IDA Pro ③  ──WebSocket──╯  ▲
+   ...                     │
+IDA Pro ⓝ  ──WebSocket─────╯
 ```
 
 ## Quick Start
@@ -25,7 +29,7 @@ bun run bundle:bin  # → apps/api/dist/ida-hub
 ```
 
 ```bash
-./ida-hub                                  # default 0.0.0.0:10086
+./ida-hub # default 0.0.0.0:10086
 # or
 ./ida-hub --port 8080
 ./ida-hub --host 127.0.0.1 --port 8080
