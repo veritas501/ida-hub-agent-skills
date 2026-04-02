@@ -1,0 +1,30 @@
+{
+  "name": "@ida-claw/shared",
+  "version": "0.5.9",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "consola": "^3.4.0",
+    "drizzle-orm": "^0.44.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "drizzle-kit": "^0.30.0",
+    "typescript": "^5.8.0"
+  }
+}

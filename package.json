@@ -1,0 +1,25 @@
+{
+  "name": "ida-claw",
+  "private": true,
+  "scripts": {
+    "dev:api": "bun --filter ida-hub dev",
+    "dev:web": "bun --filter @ida-claw/web dev",
+    "build": "turbo run build",
+    "bundle": "turbo run build && cd apps/api && bun run bundle",
+    "bundle:bin": "turbo run build && cd apps/api && bun run bundle:bin",
+    "start": "bun --filter ida-hub start",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "bun@1.3.5"
+}

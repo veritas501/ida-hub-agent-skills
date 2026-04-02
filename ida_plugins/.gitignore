@@ -1,0 +1,11 @@
+# Build/runtime caches for plugin development
+__pycache__/
+*.py[cod]
+
+# Local environment files
+.env
+.env.*
+
+# Keep plugin sources tracked, ignore runtime artifacts only
+ida_multi_chat/.hub_config.json
+

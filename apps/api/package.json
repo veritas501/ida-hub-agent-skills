@@ -1,0 +1,28 @@
+{
+  "name": "ida-hub",
+  "version": "0.5.9",
+  "description": "IDA Chat Hub — unified gateway for IDA Pro instances and external agents",
+  "type": "module",
+  "bin": {
+    "ida-hub": "./dist/server.js"
+  },
+  "files": [
+    "dist/",
+    "web/"
+  ],
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "build": "tsc",
+    "bundle": "bun build src/server.ts --target=bun --outdir=dist --minify && rm -rf web && cp -r ../web/dist web",
+    "bundle:bin": "bun build src/server.ts --compile --outfile dist/ida-hub && rm -rf dist/web && cp -r ../web/dist dist/web",
+    "start": "bun dist/server.js",
+    "clean": "rm -rf dist web"
+  },
+  "dependencies": {
+    "hono": "^4.12.9"
+  },
+  "devDependencies": {
+    "@ida-claw/shared": "workspace:*",
+    "typescript": "^5.8.0"
+  }
+}

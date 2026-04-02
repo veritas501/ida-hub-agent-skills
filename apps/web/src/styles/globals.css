@@ -1,0 +1,426 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================================
+   IDA Chat Hub — 暗橙主题设计系统 (Midnight Ember)
+   ================================================================
+   设计原则:
+   - 4 层背景递进 (bg → panel → elevated → muted)
+   - 橙色高亮作为品牌色
+   - 12px/10px/8px 三级圆角
+   - 统一 font-weight: 标题 600, 正文 400, 标签 600, 按钮 600
+   - 统一 font-size: 标题 20px, 正文 14px, 标签 11px, 小字 13px
+   ================================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── 背景层级（由深到浅，4 层）── */
+  --bg:              #161a22;
+  --panel:           #1c2029;
+  --panel-elevated:  #232830;
+  --panel-muted:     #2a2f38;
+
+  /* ── 顶栏 ── */
+  --topbar-bg:       rgba(12, 14, 18, 0.85);
+  --topbar-border:   #1e222c;
+
+  /* ── 边框 ── */
+  --line:            #1e222c;
+  --line-strong:     #2a2f3a;
+
+  /* ── 文字层级 ── */
+  --text:            #f1f3f7;
+  --text-secondary:  #b8bfcc;
+  --muted:           #c0c6d0;
+  --muted-strong:    #d0d5dd;
+
+  /* ── 品牌色（暗橙）── */
+  --primary:         #e87b35;
+  --primary-strong:  #d46a28;
+  --primary-soft:    rgba(232, 123, 53, 0.10);
+  --primary-text:    #f0944f;
+
+  /* ── 语义色 ── */
+  --success:         #3dce80;
+  --success-soft:    rgba(61, 206, 128, 0.08);
+  --danger:          #ef5350;
+  --danger-soft:     rgba(239, 83, 80, 0.08);
+  --warning:         #f5a623;
+  --warning-soft:    rgba(245, 166, 35, 0.08);
+
+  /* ── 代码区 ── */
+  --code-bg:         #0a0c10;
+
+  /* ── 效果 ── */
+  --focus-ring:      rgba(232, 123, 53, 0.25);
+  --shadow-sm:       0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-xs:       0 2px 8px rgba(0, 0, 0, 0.25);
+  --glow:            0 0 20px rgba(232, 123, 53, 0.12);
+
+  /* ── 字体 ── */
+  --font-sans:
+    "Inter", "Source Han Sans SC", "Noto Sans SC", "PingFang SC",
+    "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono:
+    "JetBrains Mono", "Cascadia Code", "Fira Code",
+    "Roboto Mono", Menlo, Monaco, Consolas, monospace;
+
+  /* ── 设计令牌 ── */
+  --radius-lg:   0.75rem;   /* 12px — 卡片 */
+  --radius-md:   0.625rem;  /* 10px — 子卡片 */
+  --radius-sm:   0.5rem;    /* 8px  — 按钮、输入框 */
+  --radius-xs:   0.375rem;  /* 6px  — 标签、徽章 */
+}
+
+/* ── 全局基础 ── */
+* { box-sizing: border-box; }
+
+html, body {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html { overflow-y: scroll; }
+@supports (scrollbar-gutter: stable) {
+  html { overflow-y: auto; scrollbar-gutter: stable; }
+}
+
+/* ── 滚动条 ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+button, input, textarea, select { font: inherit; }
+textarea { resize: vertical; }
+
+::selection {
+  background: rgba(232, 123, 53, 0.25);
+  color: var(--text);
+}
+
+:where(a, button, input, textarea, select) {
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+}
+
+:where(a, button, input, textarea, select):focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--primary);
+}
+
+/* ================================================================
+   组件层
+   ================================================================ */
+@layer components {
+  /* ── 卡片 ── */
+  .app-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+  }
+
+  .app-subcard {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--panel-elevated);
+  }
+
+  /* ── 按钮 ── */
+  .app-btn-primary {
+    display: inline-flex;
+    min-height: 2.5rem;         /* 40px */
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--primary);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;        /* 14px */
+    font-weight: 600;
+    color: #ffffff;
+    box-shadow: var(--glow);
+    cursor: pointer;
+  }
+  .app-btn-primary:hover:not(:disabled) {
+    background: var(--primary-strong);
+    box-shadow: 0 0 28px rgba(232, 123, 53, 0.2);
+  }
+  .app-btn-primary:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .app-btn-secondary {
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--panel-elevated);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .app-btn-secondary:hover:not(:disabled) {
+    border-color: var(--muted);
+    background: var(--panel-muted);
+    color: var(--text);
+  }
+  .app-btn-secondary:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .app-btn-primary:disabled,
+  .app-btn-secondary:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    box-shadow: none;
+  }
+
+  /* ── 状态面板 ── */
+  .app-state-panel {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+    padding: 1rem 1.25rem;
+  }
+  .app-state-panel-error {
+    border-color: rgba(239, 83, 80, 0.2);
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .app-state-panel-empty {
+    border-style: dashed;
+    background: var(--panel-elevated);
+    color: var(--muted);
+  }
+
+  /* ── 行内代码 ── */
+  .app-inline-code {
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-xs);
+    background: var(--panel-muted);
+    padding: 0.125rem 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--primary-text);
+    font-family: var(--font-mono);
+  }
+
+  /* ── 代码块 ── */
+  .app-code-block {
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--code-bg);
+    padding: 0.875rem 1rem;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: #e4e6eb;
+    font-family: var(--font-mono);
+  }
+
+  /* ── 区块标签 ── */
+  .app-section-label {
+    font-size: 0.75rem;         /* 12px */
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-strong);
+  }
+
+  /* ── 输入框 ── */
+  .app-input {
+    width: 100%;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--panel-muted);
+    padding: 0.7rem 1rem;
+    font-size: 0.9375rem;       /* 15px */
+    font-weight: 400;
+    color: var(--text);
+  }
+  .app-input::placeholder { color: var(--muted); }
+  .app-input:hover { border-color: var(--muted); }
+  .app-input:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring);
+  }
+  .app-input:disabled {
+    background: var(--panel);
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+
+  /* 带图标的输入框 — 左侧 padding 增大 */
+  .app-input-with-icon { padding-left: 2.5rem; }
+
+  /* ── 下拉选择 ── */
+  .app-select {
+    width: 100%;
+    cursor: pointer;
+    appearance: none;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--panel-muted);
+    padding: 0.7rem 2.5rem 0.7rem 1rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .app-select:hover { border-color: var(--muted); }
+  .app-select:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring);
+  }
+  .app-select:disabled {
+    background: var(--panel);
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+
+  /* ── 徽章 ── */
+  .app-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .app-badge-success {
+    border: 1px solid rgba(61, 206, 128, 0.15);
+    background: var(--success-soft);
+    color: var(--success);
+  }
+  .app-badge-danger {
+    border: 1px solid rgba(239, 83, 80, 0.15);
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .app-badge-muted {
+    border: 1px solid var(--line);
+    background: var(--panel-elevated);
+    color: var(--muted-strong);
+  }
+
+  /* ── 分割线文字 ── */
+  .app-divider-text {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+  .app-divider-text::before,
+  .app-divider-text::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  /* ── 页面标题区 ── */
+  .app-page-title {
+    font-size: 1.5rem;          /* 24px */
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .app-page-subtitle {
+    font-size: 0.9375rem;       /* 15px */
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+}
+
+/* ================================================================
+   动画
+   ================================================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 250ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin { animation: spin 0.8s linear infinite; }
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(61, 206, 128, 0.4); }
+  50%      { box-shadow: 0 0 0 5px rgba(61, 206, 128, 0); }
+}
+.pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* ── 骨架屏闪烁 ── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--line) 25%, var(--line-strong) 50%, var(--line) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-xs);
+}
+
+/* ================================================================
+   代码编辑器
+   ================================================================ */
+
+/* Python 语法 token (vscDarkPlus) */
+.code-editor .token.comment,
+.code-editor .token.prolog,
+.code-editor .token.doctype    { color: #6a9955; font-style: italic; }
+.code-editor .token.keyword    { color: #569cd6; }
+.code-editor .token.builtin    { color: #4ec9b0; }
+.code-editor .token.string,
+.code-editor .token.triple-quoted-string { color: #ce9178; }
+.code-editor .token.number     { color: #b5cea8; }
+.code-editor .token.boolean    { color: #569cd6; }
+.code-editor .token.function   { color: #dcdcaa; }
+.code-editor .token.operator   { color: #d4d4d4; }
+.code-editor .token.punctuation{ color: #d4d4d4; }
+.code-editor .token.class-name { color: #4ec9b0; }
+.code-editor .token.decorator  { color: #dcdcaa; }
+.code-editor .token.constant   { color: #4fc1ff; }
+
+.code-editor textarea { outline: none !important; }
+.code-editor textarea::selection,
+.code-editor pre::selection,
+.code-editor pre *::selection {
+  background: rgba(232, 123, 53, 0.2);
+}
