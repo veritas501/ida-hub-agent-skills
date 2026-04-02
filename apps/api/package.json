@@ -13,8 +13,8 @@
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "build": "tsc",
-    "bundle": "bun build src/server.ts --target=bun --outdir=dist --minify && rm -rf web && cp -r ../web/dist web",
-    "bundle:bin": "bun build src/server.ts --compile --outfile dist/ida-hub && rm -rf dist/web && cp -r ../web/dist dist/web",
+    "bundle": "bun build src/server.ts --target=bun --outdir=dist --minify && rm -rf web dist/web && cp -r ../web/dist web",
+    "bundle:bin": "cp -r ../web/dist dist/web && bun scripts/embed-web.ts && bun build src/server.ts --compile --outfile dist/ida-hub",
     "start": "bun dist/server.js",
     "clean": "rm -rf dist web"
   },
